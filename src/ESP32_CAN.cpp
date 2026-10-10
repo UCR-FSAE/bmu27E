@@ -1,10 +1,11 @@
 #include "ESP32_CAN.h"
 
-#define CAN_TX_PIN GPIO_NUM_43
-#define CAN_RX_PIN GPIO_NUM_44
+#define CAN_TX_PIN GPIO_NUM_5
+#define CAN_RX_PIN GPIO_NUM_4
 
 bool ESP32_CAN::begin() {
-    twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(CAN_TX_PIN, CAN_RX_PIN, TWAI_MODE_NO_ACK);
+    twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(CAN_TX_PIN, CAN_RX_PIN, TWAI_MODE_NORMAL);
+    g_config.tx_queue_len = 10;
 
     twai_timing_config_t t_config = TWAI_TIMING_CONFIG_500KBITS();
     twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
@@ -18,6 +19,14 @@ bool ESP32_CAN::begin() {
     }
 
     return true;
+}
+
+void ESP32_CAN::printStatus() {
+    twai_status_info_t s;
+    twai_get_status_info(&s);
+    Serial.printf("state=%d txq=%d tx_err=%d rx_err=%d tx_failed=%d bus_err=%d arb_lost=%d\n",
+        s.state, s.msgs_to_tx, s.tx_error_counter, s.rx_error_counter,
+        s.tx_failed_count, s.bus_error_count, s.arb_lost_count);
 }
 
 bool ESP32_CAN::write(const CAN_message_t &msg) {

@@ -16,5 +16,6 @@ class ESP32_CAN {
 public:
     bool begin();
     bool write(const CAN_message_t &msg);
+    void printStatus();
     bool read(CAN_message_t &msg);
 };
