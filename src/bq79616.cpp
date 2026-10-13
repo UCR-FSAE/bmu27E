@@ -161,6 +161,14 @@ void readVoltages(){
     //TODO: do it.    
 }
 
+void readTemps() {
+    //TODO: read like a book.
+}
+
+void readFaultFlags() {
+    //double check faults that get sent
+}
+
 void rebalanceVoltages(){
     //TODO: well figure out how to write first
 }
