@@ -29,6 +29,12 @@ uint8_t message[] = {0x80, 0x02, 0x02, 0x15, 0x0B, 0xCB, 0x49};
 const int TX_PIN = 1; // not actual
 const int RX_PIN = 2; // not actual
 
+// added
+#define BQ_UART_BAUD       1000000   // BQ79600 UART speed
+#define WAKE_PING_US       2750      // wake ping low time (check tHLD_WAKE in BQ79600 datasheet)
+#define BQ_MAX_DEVICES     13        // BQ79600 (addr 0) + 12 x BQ79616 (addr 1..12)
+#define BQ_MAX_RESP_BYTES  128       // largest read the chips allow
+
 // crc lookup table
 static const uint16_t crc_table[256] = {
     0x0000, 0xC0C1, 0xC181, 0x0140, 0xC301, 0x03C0, 0x0280, 0xC241,
@@ -95,9 +101,10 @@ uint16_t crc_compute(const uint8_t *data, size_t length) {
 // data_len: number of payload bytes (0–8)
 uint8_t build_write_frame(uint8_t *buf, uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, const uint8_t *data, uint8_t data_len) {
     uint8_t i = 0;
+    if (data_len < 1 || data_len > 8) return 0;   // ADDED: frame holds 1-8 data bytes; 0 = error
     
     // Header
-    buf[i++] = msgType + data_len ;    // frame type
+    buf[i++] = msgType | ((data_len - 1) & 0x07);    // frame type  (FIXED: low 3 bits = data bytes - 1)
     if (msgType == SINGLE_WRITE_VAL) { buf[i++] = dev_addr; }    // device address
     
     buf[i++] = (uint8_t)(reg_addr >> 8);    // register address high byte
@@ -147,10 +154,15 @@ void sendFrame(uint8_t* frame, uint8_t len) {
 }
 
 void wakePing() {
+    UART_SERIAL.flush();             // ADDED: finish sending anything queued
+    UART_SERIAL.end();               // ADDED: UART releases the TX pin so we can drive it
+    pinMode(TX_PIN, OUTPUT);         // ADDED
     digitalWrite(TX_PIN, HIGH);
     digitalWrite(TX_PIN, LOW);
-    delayMicroseconds(2500);
+    delayMicroseconds(WAKE_PING_US); // CHANGED: was 2500 (bottom edge of the window), now 2750
     digitalWrite(TX_PIN, HIGH);
+    UART_SERIAL.begin(BQ_UART_BAUD, SERIAL_8N1, RX_PIN, TX_PIN);   // ADDED: give the pin back to the UART
+    delay(4);                        // ADDED: let the BQ79600 finish waking
 }
 
 //===================================
@@ -193,4 +205,84 @@ void testTeensyWrite(){
 
 void testBQWrite(){
     
+}
+
+// Call once in setup(). Bigger RX buffer because a stack read from 12 boards
+// returns more than the 256-byte default.
+void bqUartInit() {
+    UART_SERIAL.setRxBufferSize(2048);
+    UART_SERIAL.begin(BQ_UART_BAUD, SERIAL_8N1, RX_PIN, TX_PIN);
+}
+
+// Throw away any old bytes so they aren't mistaken for a new reply.
+void bqFlushRx() {
+    while (UART_SERIAL.available()) UART_SERIAL.read();
+}
+
+// Replies stored by the device address inside each reply (0 = BQ79600, 1..N = BQ79616s).
+struct BqResponse {
+    uint8_t data[BQ_MAX_DEVICES][BQ_MAX_RESP_BYTES];
+    bool    valid[BQ_MAX_DEVICES];
+    int     num_valid;
+};
+
+// Read exactly n bytes, or give up at the deadline so a dead board can't hang the code.
+static bool readExact(uint8_t *buf, size_t n, uint32_t deadline_ms) {
+    size_t got = 0;
+    while (got < n) {
+        if (UART_SERIAL.available()) buf[got++] = (uint8_t)UART_SERIAL.read();
+        else if ((int32_t)(millis() - deadline_ms) > 0) return false;
+    }
+    return true;
+}
+
+// Collect up to `expected_frames` replies of `nbytes` data bytes each.
+// Reply frame: [len-1][dev][reg_H][reg_L][data x len][CRC_L][CRC_H]
+// Returns how many valid (CRC-checked) replies arrived.
+int bqReadResponse(uint8_t nbytes, int expected_frames, BqResponse *out, uint32_t timeout_ms) {
+    for (int i = 0; i < BQ_MAX_DEVICES; i++) out->valid[i] = false;
+    out->num_valid = 0;
+
+    uint32_t deadline = millis() + timeout_ms;
+    uint8_t frame[BQ_MAX_RESP_BYTES + 6];
+
+    for (int k = 0; k < expected_frames; k++) {
+        if (!readExact(frame, 1, deadline)) break;
+        if (frame[0] & 0x80) { k--; continue; }            // not a reply start byte, resync
+        size_t dlen  = (size_t)(frame[0] & 0x7F) + 1;
+        size_t total = dlen + 6;
+        if (!readExact(frame + 1, total - 1, deadline)) break;
+        if (crc_compute(frame, total) != 0) continue;      // CRC over whole frame = 0 if intact
+        uint8_t addr = frame[1] & 0x3F;
+        if (addr >= BQ_MAX_DEVICES || dlen != nbytes) continue;
+        memcpy(out->data[addr], frame + 4, dlen);
+        if (!out->valid[addr]) { out->valid[addr] = true; out->num_valid++; }
+    }
+    return out->num_valid;
+}
+
+
+// Write 1-8 bytes. msgType = SINGLE_WRITE_VAL / STACK_WRITE_VAL / BROAD_WRITE_VAL.
+bool bqWrite(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, const uint8_t *data, uint8_t data_len) {
+    uint8_t buf[16];
+    uint8_t len = build_write_frame(buf, msgType, dev_addr, reg_addr, data, data_len);
+    if (len == 0) return false;
+    sendFrame(buf, len);
+    return true;
+}
+
+bool bqWrite1(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, uint8_t value) {
+    return bqWrite(msgType, dev_addr, reg_addr, &value, 1);
+}
+
+// Read `nbytes` (real count, 1-128) and collect the replies.
+// msgType = SINGLE_READ_VAL / STACK_READ_VAL / BROAD_READ_VAL.
+int bqRead(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, uint8_t nbytes,
+           int expected_frames, BqResponse *out, uint32_t timeout_ms) {
+    if (nbytes < 1 || nbytes > BQ_MAX_RESP_BYTES) return 0;
+    uint8_t buf[16];
+    bqFlushRx();
+    uint8_t len = build_read_frame(buf, msgType, dev_addr, reg_addr, nbytes - 1);  // frame wants bytes - 1
+    sendFrame(buf, len);
+    return bqReadResponse(nbytes, expected_frames, out, timeout_ms);
 }
