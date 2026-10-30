@@ -2,6 +2,7 @@
 #include "ESP32_CAN.h"
 
 #include "fsm.h"
+#include "bq79616.h"
 
 ESP32_CAN Can;
 
@@ -16,15 +17,21 @@ Outputs         out;
 
 void setup() {
     Serial.begin(9600);
+    bqUartInit();
 
+    delay(10);
+
+    wakePing();
+    wakePing();
 }
 
 void loop() {
     // read cell volt, temp, pack current, fault flags from ICs
     // Check for implausible data
-    run_fsm(curState, in, out);
+    // run_fsm(curState, in, out);
     // Send faults if needed
     // Balance cells (if needed)
     // Manage charging 
     // Sends data over CAN
+    
 }
