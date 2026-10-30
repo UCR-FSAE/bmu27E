@@ -55,14 +55,14 @@ static void decide_balancing(const ChargeInputs& in, ChargeOutputs& out) {
   out.balance_enable = allowed;
   if (!allowed) { bal_on = false; return; }
 
-  if (bal_on && millis() - last_bal_ms < BAL_REEVALUATE_MS) return;
+  if (bal_on && millis() - last_bal_ms < BALANCING_REEVALUATE_MS) return;
   last_bal_ms = millis();
 
   bool any = false;
   for (int d = 0; d < NUM_STACK_DEVICES; d++)
     for (int c = 0; c < CELLS_PER_DEVICE; c++) {
       uint16_t v = in.cell_mv[d][c];
-      out.balance_cells[d][c] = v >= BAL_MIN_CELL_MV && v > in.min_cell_mv + BAL_THRESHOLD_MV;
+      out.balance_cells[d][c] = v >= BALANCING_MIN_CELL_MV && v > in.min_cell_mv + BALANCING_THRESHOLD_MV;
       any |= out.balance_cells[d][c];
     }
   out.balance_update = true;   // apply: start if any cell selected, else stop

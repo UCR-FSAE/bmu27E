@@ -3,6 +3,8 @@
 #include <Arduino.h>
 #include "charge_config.h"
 
+// Uses the UART functions in bq79616.cpp. Call bqUartInit() in setup() first.
+
 // Wake the BQ79600, then have it wake the 616 stack.
 void bq_wake();
 

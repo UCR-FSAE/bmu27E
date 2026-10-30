@@ -1,23 +1,30 @@
 // charge_config.h — constants for wake, auto-addressing, balancing and charging.
-// TODO values come from the cell datasheet / final pack design.
+// values from the cell datasheet / final pack design.
 #pragma once
 #include <stdint.h>
 
 // ============================== Pack layout ==============================
-#define NUM_STACK_DEVICES     6     // number of BQ79616 boards. TODO: 6 or 12?
-#define CELLS_PER_DEVICE      10
-#define TOTAL_CELLS           (NUM_STACK_DEVICES * CELLS_PER_DEVICE)
-#define TOTAL_DEVICES         (NUM_STACK_DEVICES + 1)   // +1 = BQ79600 bridge (address 0)
+// 6 subpacks x 60 cells = 360 cells, monitored by 12 BQ79616s (2 per subpack).
+// 20s3p per subpack -> 120s3p pack: each BQ79616 sees 10 series groups,
+#define NUM_STACK_DEVICES     12    // number of boards 
+#define CELLS_PER_DEVICE      10    // series
+#define CELLS_PARALLEL        3     // cells in parallel per series group
+#define TOTAL_CELLS           (NUM_STACK_DEVICES * CELLS_PER_DEVICE)   // series groups 
+#define TOTAL_DEVICES         (NUM_STACK_DEVICES + 1)   
 
 // ============================== Balancing ==============================
-#define BAL_THRESHOLD_MV          15     // balance cells this far above the lowest cell
-#define BAL_MIN_CELL_MV           3900   // only balance near the top of charge
-#define BAL_REEVALUATE_MS         30000  // recompute which cells to balance
+// all in millivolts
+// ms in millisecs
+#define BALANCING_THRESHOLD_MV          15     // 15mv to  balance cells
+#define BALANCING_MIN_CELL_MV           3900   // cell balanced if at least 3.9v
+#define BALANCING_REEVALUATE_MS         30000  // rededcides cell balancing every 30 secs
 
 // ============================== Charging ==============================
-#define CELL_CHARGE_TARGET_MV     4150   // TODO: chemistry dependent
-#define CELL_TAPER_START_MV       4100   // start reducing current here
-#define CELL_CHARGE_I_MAX_A       10.0f  // TODO: cell max charge current x parallel count
+// in millivolts
+
+#define CELL_CHARGE_TARGET_MV     4150   // 4.15v to stop at (per cell group)
+#define CELL_TAPER_START_MV       4100   // when current reduces (4.1v)
+#define CELL_CHARGE_I_MAX_A       (3.3f * CELLS_PARALLEL)  // TODO: cell max charge current x parallel count
 #define CHARGE_END_CURRENT_A      1.0f   // done when current tapers below this
 #define CHARGE_RAMP_A_PER_S       2.0f   // max rise rate of the current request
 #define CHARGE_TEMP_MIN_C         0.0f   // no charging below this
@@ -37,10 +44,12 @@
 #define ELCON_DETECT_TIMEOUT_MS   3000      // wait this long for the first status frame
 
 // ============================== Comms / pins (XIAO ESP32-S3) ==============================
-#define BQ_UART_BAUD          1000000
-#define CAN_CAR_BAUD          500000
-#define CAN_CHARGER_BAUD      250000
-#define PIN_BQ_TX             43   // -> BQ79600 RX   TODO: confirm with schematic
-#define PIN_BQ_RX             44   // <- BQ79600 TX
-#define CAN_TX_GPIO           GPIO_NUM_5   // same pins as ESP32_CAN.cpp
-#define CAN_RX_GPIO           GPIO_NUM_4
+// #define BQ_UART_BAUD          1000000   // now set in bq79616.cpp
+// #define CAN_CAR_BAUD          500000
+// #define CAN_CHARGER_BAUD      250000
+// #define PIN_BQ_TX             43        // now TX_PIN in bq79616.cpp
+// #define PIN_BQ_RX             44        // now RX_PIN in bq79616.cpp
+#define CAN_TX_GPIO           GPIO_NUM_5   // must match ESP32_CAN.cpp (pinout sheet says GPIO 41)
+#define CAN_RX_GPIO           GPIO_NUM_4   // must match ESP32_CAN.cpp (pinout sheet says GPIO 39)
+
+// ^^ still need to confirm w schematics
