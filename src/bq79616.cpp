@@ -26,8 +26,8 @@ uint8_t message[] = {0x80, 0x02, 0x02, 0x15, 0x0B, 0xCB, 0x49};
 
 #define UART_SERIAL Serial1
 
-const int TX_PIN = 1; // not actual
-const int RX_PIN = 2; // not actual
+#define RX_PIN D7
+#define TX_PIN D6
 
 // added
 #define BQ_UART_BAUD       1000000   // BQ79600 UART speed
