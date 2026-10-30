@@ -22,3 +22,11 @@
 // bool bq_pause_balancing(bool pause);   // pause while reading cell voltages
 // bool bq_balancing_active();
 // */
+#pragma once
+#include <Arduino.h>
+#include "bq_constants.h"
+
+
+void bqUartInit(); // Call once in setup(). Enlarges the RX buffer for stack reads.
+void wakePing(); // wake ping 
+void bqFlushRx(); // Discard any stale bytes before a new read.

@@ -2,7 +2,7 @@
 #include "ESP32_CAN.h"
 
 #include "fsm.h"
-#include "bq79616.h"
+#include "bq_comm.h"
 
 ESP32_CAN Can;
 
@@ -32,10 +32,7 @@ void setup() {
     bqUartInit();
     delay(10);
  
-    Serial.println("Wake ping 1");
-    wakePing();                        // includes a 4 ms settle delay
-    Serial.println("Wake ping 2");
-    wakePing();
+    bq_wake();
 }
 
 void loop() {

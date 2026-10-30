@@ -1,46 +1,33 @@
-// // bq_init.cpp — follows BQ79616 datasheet Table 7-19 (Auto-Addressing) with a
-// // BQ79600 bridge. Cross-check with TI's Software Design Reference.
-// #include "bq_init.h"
-// #include "bq_reqs.h"
-
-// // ---- Functions from bq79616.cpp (no header, so declared here) ----
-// // Keep these matching bq79616.cpp.
-// #define SINGLE_WRITE_VAL   0x90
-// #define STACK_WRITE_VAL    0xB0
-// #define BROAD_READ_VAL     0xC0
-// #define BROAD_WRITE_VAL    0xD0
-// #define BQ_MAX_DEVICES     13
-// #define BQ_MAX_RESP_BYTES  128
-
-// struct BqResponse {
-//   uint8_t data[BQ_MAX_DEVICES][BQ_MAX_RESP_BYTES];
-//   bool    valid[BQ_MAX_DEVICES];
-//   int     num_valid;
-// };
-
-// void wakePing();
-// bool bqWrite(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, const uint8_t *data, uint8_t data_len);
-// bool bqWrite1(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, uint8_t value);
-// int  bqRead(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, uint8_t nbytes,
-//             int expected_frames, BqResponse *out, uint32_t timeout_ms);
-// // ------------------------------------------------------------------
-
-// // static BqResponse resp;
-
-// // static_assert(TOTAL_DEVICES <= BQ_MAX_DEVICES, "Raise BQ_MAX_DEVICES (here and in bq79616.cpp)");
-// // static bool balancing = false;
+/*
+    Functions for board bring up
+*/
+#include "bq_init.h"
 
 // // ------------------------------------------------------------------ wake
 
-// void bq_wake() {
-//   // 1) Wake ping to the BQ79600 (TX held low). Twice, as in TI's sample code.
-//   wakePing();
-//   wakePing();
+void wakePing() {
+    UART_SERIAL.flush();             // ADDED: finish sending anything queued
+    UART_SERIAL.end();               // ADDED: UART releases the TX pin so we can drive it
+    pinMode(TX_PIN, OUTPUT);         // ADDED
+    digitalWrite(TX_PIN, HIGH);
+    digitalWrite(TX_PIN, LOW);
+    delayMicroseconds(WAKE_PING_US); // CHANGED: was 2500 (bottom edge of the window), now 2750
+    digitalWrite(TX_PIN, HIGH);
+    UART_SERIAL.begin(BQ_UART_BAUD, SERIAL_8N1, RX_PIN, TX_PIN);   // ADDED: give the pin back to the UART
+    delay(4);                        // ADDED: let the BQ79600 finish waking
+}
 
-//   // 2) Bridge sends a wake tone up the daisy chain to the 616s.
-//   bqWrite1(SINGLE_WRITE_VAL, 0, REG_CONTROL1, CONTROL1_SEND_WAKE);
-//   // delay(STACK_WAKE_MS_PER_DEV * NUM_STACK_DEVICES);
-// }
+// Call once in setup(). Bigger RX buffer because a stack read from 12 boards
+// returns more than the 256-byte default.
+void bqUartInit() {
+    UART_SERIAL.setRxBufferSize(2048);
+    UART_SERIAL.begin(BQ_UART_BAUD, SERIAL_8N1, RX_PIN, TX_PIN);
+}
+
+// Throw away any old bytes so they aren't mistaken for a new reply.
+void bqFlushRx() {
+    while (UART_SERIAL.available()) UART_SERIAL.read();
+}
 
 // // -------------------------------------------------------- auto-addressing
 
