@@ -1,7 +1,7 @@
 // bq_init.cpp — follows BQ79616 datasheet Table 7-19 (Auto-Addressing) with a
 // BQ79600 bridge. Cross-check with TI's Software Design Reference.
 #include "bq_init.h"
-#include "bq_regs.h"
+#include "bq_reqs.h"
 
 // ---- Functions from bq79616.cpp (no header, so declared here) ----
 // Keep these matching bq79616.cpp.

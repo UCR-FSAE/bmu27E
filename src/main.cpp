@@ -22,7 +22,7 @@ void setup() {
 void loop() {
     // read cell volt, temp, pack current, fault flags from ICs
     // Check for implausible data
-    rum_fsm(curState, in, out);
+    run_fsm(curState, in, out);
     // Send faults if needed
     // Balance cells (if needed)
     // Manage charging 
