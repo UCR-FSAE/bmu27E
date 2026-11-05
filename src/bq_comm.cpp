@@ -39,13 +39,16 @@ uint16_t crc_compute(const uint8_t *data, size_t length) {
 }
 
 void bq_wake() {
-  // 1) Wake ping to the BQ79600 (TX held low). Twice, as in TI's sample code.
-  wakePing();
-  wakePing();
+    wakePing();                       // low 2.5-3 ms (tHLD_WAKE)
+    delay(5);                         // > tSU(WAKE_SHUT) max 3.5 ms
+    wakePing();                       // second ping
+    delay(1);                         // > tRST 600 us before first frame
 
-  // 2) Bridge sends a wake tone up the daisy chain to the 616s.
-  bqWrite1(SINGLE_WRITE_VAL, 0, REG_CONTROL1, CONTROL1_SEND_WAKE);
-  // delay(STACK_WAKE_MS_PER_DEV * NUM_STACK_DEVICES);
+    // Bridge sends WAKE tone up the daisy chain, then resets itself
+    bqWrite1(SINGLE_WRITE_VAL, 0, REG_CONTROL1, CONTROL1_SEND_WAKE);
+
+    // Stack: (10 ms + 0.6 ms) per device
+    delayMicroseconds(10600UL * NUM_DEVICES);   // 127.2 ms; or delay(130)
 }
 
 // Message Type Definitions
@@ -205,4 +208,62 @@ int bqRead(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, uint8_t nbytes,
     uint8_t len = build_read_frame(buf, msgType, dev_addr, reg_addr, nbytes - 1);  // frame wants bytes - 1
     sendFrame(buf, len);
     return bqReadResponse(nbytes, expected_frames, out, timeout_ms);
+}
+
+// Assumes: TOTAL_DEVICES = NUM_STACK_DEVICES + 1 (BQ79600 bridge = addr 0, BQ79616s = 1..N)
+// Assumes helpers STACK_READ_VAL / SINGLE_READ_VAL exist alongside BROAD_WRITE_VAL etc.
+// Assumes `resp` is indexed by the device address in each response frame.
+
+#define TOTAL_DEVICES 13
+#define NUM_STACK_DEVICES 12
+
+bool bq_auto_address() {
+//   static_assert(TOTAL_DEVICES == NUM_STACK_DEVICES + 1,
+//                 "TOTAL_DEVICES must be bridge + stack devices");
+    // Step 1: dummy broadcast write 0x00 to ECC_DATA1..8 (sync DLL, write direction)
+    uint8_t zeros[8] = {0};
+    bqWrite(BROAD_WRITE_VAL, 0, REG_OTP_ECC_DATAIN1, zeros, 8);
+    delay(1);
+
+    // Step 2: enable auto-addressing
+    bqWrite1(BROAD_WRITE_VAL, 0, REG_CONTROL1, CONTROL1_ADDR_WR);
+
+    // Step 3: broadcast consecutive addresses. Bridge = 0, 616s = 1..N.
+    for (uint8_t a = 0; a < TOTAL_DEVICES; a++) {
+        bqWrite1(BROAD_WRITE_VAL, 0, REG_DIR0_ADDR, a);
+    }
+
+    // Step 4: all stack devices, then top of stack.
+    // The BQ79600 bridge has no COMM_CTRL register and is base by default,
+    // so it gets no COMM_CTRL write.
+    bqWrite1(BROAD_WRITE_VAL, 0, REG_COMM_CTRL, COMM_CTRL_STACK_DEV);
+    bqWrite1(SINGLE_WRITE_VAL, NUM_STACK_DEVICES, REG_COMM_CTRL,
+             COMM_CTRL_STACK_DEV | COMM_CTRL_TOP_STACK);
+
+    // Step 5: dummy read of ECC_DATA1..8 (sync DLL, read direction).
+    // STACK read, not broadcast: the bridge datasheet forbids broadcast reads.
+    // Missing responses here are normal.
+    bqRead(STACK_READ_VAL, 0, REG_OTP_ECC_DATAIN1, 8, NUM_STACK_DEVICES, &resp, 20);
+
+    // Step 7: read back DIR0_ADDR from every stack device (stack read -> 616s only)
+    int n = bqRead(STACK_READ_VAL, 0, REG_DIR0_ADDR, 1, NUM_STACK_DEVICES, &resp, 20);
+    bool ok = (n == NUM_STACK_DEVICES);
+    for (int a = 1; a <= NUM_STACK_DEVICES; a++) {
+        bool good = resp.valid[a] && (resp.data[a][0] & 0x3F) == a;
+        Serial.printf("[BQ] device %d: %s\n", a, good ? "OK" : "MISSING/WRONG");
+        ok &= good;
+    }
+
+    // Bridge isn't part of a stack read, so check it with a single device read
+    int nb = bqRead(SINGLE_READ_VAL, 0, REG_DIR0_ADDR, 1, 1, &resp, 20);
+    bool bridgeGood = (nb == 1) && resp.valid[0] && (resp.data[0][0] & 0x3F) == 0;
+    Serial.printf("[BQ] device 0 (bridge): %s\n", bridgeGood ? "OK" : "MISSING/WRONG");
+    ok &= bridgeGood;
+
+    // Step 8: DLL sync can leave comm faults latched, so clear them.
+    uint8_t ff[2] = {0xFF, 0xFF};
+    bqWrite(STACK_WRITE_VAL, 0, REG_FAULT_RST1, ff, 2);       // FAULT_RST1 (0x331) + FAULT_RST2 (0x332)
+    bqWrite1(SINGLE_WRITE_VAL, 0, REG_FAULT_RST_600, 0xFF);   // bridge FAULT_RST (0x2030)
+
+    return ok;
 }

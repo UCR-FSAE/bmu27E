@@ -65,6 +65,7 @@ static const uint16_t crc_table[256] = {
 uint16_t crc_compute(const uint8_t *data, size_t length);
 
 void bq_wake();
+bool bq_auto_address();
 
 // ---------------------------------------------------------------------------
 // Frame builders (return total frame length, 0 on error)

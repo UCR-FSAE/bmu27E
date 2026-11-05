@@ -68,5 +68,5 @@
 // ---------------- Timing ----------------
 #define WAKE_PING_US           2750     // BQ79600 RX held low (check tHLD_WAKE)
 #define WAKE_SETTLE_MS         4
-#define STACK_WAKE_MS_PER_DEV  12       // after SEND_WAKE, per device (TI sample ~11.6 ms)
+#define NUM_DEVICES            12
 
