@@ -4,9 +4,9 @@
 #include <math.h>
 
 // ---=== BASIC PLAN
-// get resistance using formula?: res = R_CONST * gpio_uv / (tsref_uv - gpio_uv);
+// get resistance using formula: res = R_CONST * gpio_uv / (tsref_uv - gpio_uv);
 // old thermistor code uses steinhart formula w/ the 3 coefficients A, B, C.
-// find out what thermistor values are from altium? elias needs to add me.
+// find out what current thermistor values are from altium
 // evan needs to meet w/ other teams during scope meeting to figure this out but assume old stuff still being used for now
 
 
