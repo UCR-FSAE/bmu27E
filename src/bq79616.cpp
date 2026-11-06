@@ -21,6 +21,25 @@ CRC 2,
 
 #include <Arduino.h>
 
+// CMU count, cell count per CMU 
+// TODO: make sure 12*10 is correct
+constexpr uint8_t BQ_DEVICE_COUNT = 12; 
+constexpr uint8_t BQ_CELLS_PER_DEVICE = 10;
+
+// 1 Mbps from doc and datasheet
+constexpr uint32_t BQ_UART_BAUD = 1000000;
+
+// struct to store our things
+struct BQVoltageReadings {
+  // store voltages in an array, use mV so we can use uint 
+  uint16_t cellVoltages_mV[BQ_DEVICE_COUNT][BQ_CELLS_PER_DEVICE];
+  uint32_t totalPackVoltage_mV;
+  uint16_t minCellVoltage_mV;
+  uint16_t maxCellVoltage_mV;
+  // return false if read failed, fiels retain last complete read.
+  bool valid;
+};
+
 uint8_t message[] = {0x80, 0x02, 0x02, 0x15, 0x0B, 0xCB, 0x49};
 // single device read command frame (table 1-2) (SDR p2)
 
@@ -97,7 +116,7 @@ uint8_t build_write_frame(uint8_t *buf, uint8_t msgType, uint8_t dev_addr, uint1
     uint8_t i = 0;
     
     // Header
-    buf[i++] = msgType + data_len ;    // frame type
+    buf[i++] = msgType + data_len ;    // frame type NOTE: shouldnt this be data_len - 1?
     if (msgType == SINGLE_WRITE_VAL) { buf[i++] = dev_addr; }    // device address
     
     buf[i++] = (uint8_t)(reg_addr >> 8);    // register address high byte
@@ -156,9 +175,80 @@ void wakePing() {
 //===================================
 // coner's work
 //===================================
-//placeholders
+ 
+BQVoltageReadings voltageReadings = {};
+
 void readVoltages(){
-    //TODO: do it.    
+
+  const int frameSize = 4 + BQ_CELLS_PER_DEVICE * 2 + 2;
+
+  // TODO:this could be elsewhere, unsure if we need to start UART within function
+  static bool uartStarted = false;
+  if (!uartStarted) {
+    UART_SERIAL.setRxBufferSize(512);
+    UART_SERIAL.begin(BQ_UART_BAUD, SERIAL_8N1, RX_PIN, TX_PIN);
+    UART_SERIAL.setTimeout(20); // # of ms readBytes() waits
+    uartStarted = true;
+  }
+
+  voltageReadings.valid = false;
+
+  // throw away stale bytes, ask every bq79616 for cell registers 
+  // VCELL16 is at 0x0568, VCELL10 through VCELL 1 start 6 cells (12 bytes) later because we have 10 cells per module
+
+  while (UART_SERIAL.available()) UART_SERIAL.read();
+  uint8_t command[6];
+  // TODO math could be wrong here, need to ask again about CMU implementation
+  uint16_t startRegister = 0x0568 + (16 - BQ_CELLS_PER_DEVICE) * 2;
+  uint8_t length = build_read_frame(command, STACK_READ_VAL, 0, startRegister, BQ_CELLS_PER_DEVICE * 2 - 1);
+
+  UART_SERIAL.write(command, length);
+
+  uint8_t reply[frameSize * BQ_DEVICE_COUNT];
+  if (UART_SERIAL.readBytes(reply,sizeof(reply)) != sizeof(reply)) {
+    Serial.println("Cell voltage read timed out");
+    return;
+  }
+
+  uint32_t total = 0;
+  uint16_t minimum = UINT16_MAX;
+  uint16_t maximum = 0;
+  for (int i = 0; i < BQ_DEVICE_COUNT; i++) {
+    uint8_t *frame = &reply[i * frameSize];
+
+    // running the crc over a frame including its own crc should give 0
+    if (crc_compute(frame, frameSize) != 0) {
+      Serial.println("Cell voltage CRC error");
+      return;
+    }
+  
+
+    uint8_t device = frame[1] - 1;
+    if (device >= BQ_DEVICE_COUNT) {
+      Serial.println("Cell voltage read from unknown device");
+      return;
+    }
+
+    for (int cell = 0; cell < BQ_CELLS_PER_DEVICE; cell++) {
+      int16_t raw = (frame[4 + cell * 2] << 8) | frame[5 + cell * 2];
+
+      if (raw < 0) {
+        Serial.println("Cell voltage invalid");
+        return;
+      }
+      uint16_t mV = (uint32_t)raw * 19073 / 100000; // 190.73 uV per count from datasheet
+      voltageReadings.cellVoltages_mV[device][cell] = mV;
+      total += mV;
+      if (mV < minimum) minimum = mV;
+      if (mV > maximum) maximum = mV;
+    }
+  }
+
+  // storing everything in the handy struct from earlier
+  voltageReadings.totalPackVoltage_mV = total;
+  voltageReadings.minCellVoltage_mV = minimum;
+  voltageReadings.maxCellVoltage_mV = maximum;
+  voltageReadings.valid = true;
 }
 
 void readTemps() {
