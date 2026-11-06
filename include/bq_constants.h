@@ -2,6 +2,8 @@
     Constants
 */
 
+#define EVM_TEST
+
 #pragma once
 // ---------------------------------------------------------------------------
 // Peripheral constants
@@ -14,9 +16,20 @@
 // bq init/comm constants
 // ---------------------------------------------------------------------------
 #define BQ_UART_BAUD       1000000   // BQ79600 UART speed
-#define WAKE_PING_US       2750      // wake ping low time (check tHLD_WAKE in BQ79600 datasheet)
 #define BQ_MAX_DEVICES     13        // BQ79600 (addr 0) + 12 x BQ79616 (addr 1..12)
 #define BQ_MAX_RESP_BYTES  128       // largest read the chips allow
+
+#ifdef EVM_TEST
+
+#define TOTAL_DEVICES      2
+#define NUM_STACK_DEVICES  1
+
+#else
+
+#define TOTAL_DEVICES      13
+#define NUM_STACK_DEVICES  12
+
+#endif
 
 // ---------------------------------------------------------------------------
 // Message type definitions (command byte upper nibble)
@@ -36,14 +49,13 @@
 // registers used for wake, auto-addressing and balancing
 // ---------------------------------------------------------------------------
 
-// !!! VERIFY EVERY VALUE AGAINST THE BQ79616-Q1 / BQ79600-Q1 DATASHEETS !!!
-
 // ---------------- Wake / auto-addressing ----------------
 #define REG_DIR0_ADDR          0x0306
 #define REG_COMM_CTRL          0x0308   // bit1 STACK_DEV, bit0 TOP_STACK
 #define REG_CONTROL1           0x0309   // bit0 ADDR_WR, bit5 SEND_WAKE (600)
 #define REG_OTP_ECC_DATAIN1    0x0343   // ECC_DATA1..8: DLL sync dummy write/read
 
+#define COMM_CTRL_BASE         0x00
 #define COMM_CTRL_STACK_DEV    0x02
 #define COMM_CTRL_TOP_STACK    0x01
 #define CONTROL1_ADDR_WR       0x01
@@ -57,6 +69,8 @@
 #define REG_CB_CELL1_CTRL      0x0327   // CB_CELL16_CTRL (0x0318) ... CB_CELL1_CTRL (0x0327)
 #define REG_BAL_CTRL1          0x032E   // duty cycle
 #define REG_BAL_CTRL2          0x032F
+#define REG_DEV_CONF1_600        0x2001
+#define DEV_CONF1_600_DEFAULT    0x14
 #define BAL_CTRL2_AUTO_BAL     0x01
 #define BAL_CTRL2_BAL_GO       0x02
 #define BAL_CTRL2_OTCB_EN      0x10     // pause balancing on overtemp
@@ -66,7 +80,7 @@
 #define CB_TIMER_CODE          0x02     // TODO: from CB_CELLx_CTRL table; longer than BAL_REEVALUATE_MS
 
 // ---------------- Timing ----------------
-#define WAKE_PING_US           2750     // BQ79600 RX held low (check tHLD_WAKE)
-#define WAKE_SETTLE_MS         4
-#define NUM_DEVICES            12
-
+#define WAKE_PING_US           2750      // wake ping low time
+#define WAKE_SETTLE_MS         5
+#define STACK_WAKE_PER_DEV_MS  10     // 616 from SHUTDOWN: up to 10 ms per device
+#define STACK_WAKE_MS          (NUM_STACK_DEVICES * STACK_WAKE_PER_DEV_MS + 5)

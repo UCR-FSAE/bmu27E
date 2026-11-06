@@ -4,9 +4,14 @@
 #include "fsm.h"
 #include "bq_comm.h"
 
-ESP32_CAN Can;
+
+#ifndef LED_BUILTIN
+#define LED_BUILTIN 21
+#endif
+unsigned long prevMillis = 0;
 
 // CAN messages
+ESP32_CAN Can;
 static CAN_message_t CAN_outMsg1;
 static CAN_message_t CAN_outMsg2;
 
@@ -44,9 +49,12 @@ static bool checkStack(const char *name, uint16_t reg, int expected, uint8_t mas
 }
 
 void setup() {
+    pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite(LED_BUILTIN, HIGH);
+    
     Serial.begin(115200);
     delay(2000);                       // give USB-CDC time to enumerate
-    Serial.println("\n=== BQ79600 + 12x BQ79616 wake / auto-address test ===");
+    Serial.printf("\n=== BQ79600 + %dx BQ79616 wake / auto-address test ===\n", NUM_STACK_DEVICES);
 
     bqUartInit();
     delay(10);
@@ -58,6 +66,12 @@ void setup() {
 }
 
 void loop() {
+    unsigned long now = millis();
+    if (now - prevMillis >= 500) {
+        prevMillis = now;
+        digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+    }
+
     static uint32_t count = 0;
     Serial.printf("\n--- check %lu ---\n", (unsigned long)count++);
 
@@ -71,7 +85,11 @@ void loop() {
     bool addrGood = checkStack("DIR0_ADDR", BQ616_DIR0_ADDR_REG, -1,   0x3F);
     bool idGood   = checkStack("PARTID   ", BQ616_PARTID_REG,    0x21, 0xFF);
 
-    Serial.printf("RESULT: %s\n", (bridgeOk && addrGood && idGood) ? "ALL 12 + BRIDGE OK" : "PROBLEM");
+    if (bridgeOk && addrGood && idGood) {
+        Serial.printf("RESULT: ALL %d + BRIDGE OK\n", NUM_STACK_DEVICES);
+    } else {
+        Serial.println("RESULT: PROBLEM");
+    }
 
     delay(1000);
 }

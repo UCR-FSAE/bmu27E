@@ -1,6 +1,5 @@
 /*
     Functions for communication with bq chips
-
 */
 
 // software design ref (SDR): https://www.ti.com/lit/an/slvae86b/slvae86b.pdf?ts=1775108056517
@@ -9,25 +8,12 @@
 //hi evan
 //hello coner
 
-/*---- command frame ----
-{
-command type + (num bytes sent - 1), 
-device id (only for single device read/write),
-register addr 1,
-register addr 2,
-data
-    reading - 1 byte, num bytes requested up to 128 (0x00 = 1 byte, 0x7F = 128 bytes), 
-    writing - data to be written [max 8 bytes],
-CRC 1,
-CRC 2,
-}*/
 #include <Arduino.h>
 #include "bq_comm.h"
 
-
-// uint8_t message[] = {0x80, 0x02, 0x02, 0x15, 0x0B, 0xCB, 0x49};
-// single device read command frame (table 1-2) (SDR p2)
-
+// ---------------------------------------------------------------------------
+//                      msg builder helper functions
+// ---------------------------------------------------------------------------
 // datasheet p56
 uint16_t crc_compute(const uint8_t *data, size_t length) {
     uint16_t crc = 0xFFFF;
@@ -37,33 +23,6 @@ uint16_t crc_compute(const uint8_t *data, size_t length) {
     }
     return crc;
 }
-
-void bq_wake() {
-    wakePing();                       // low 2.5-3 ms (tHLD_WAKE)
-    delay(5);                         // > tSU(WAKE_SHUT) max 3.5 ms
-    wakePing();                       // second ping
-    delay(1);                         // > tRST 600 us before first frame
-
-    // Bridge sends WAKE tone up the daisy chain, then resets itself
-    bqWrite1(SINGLE_WRITE_VAL, 0, REG_CONTROL1, CONTROL1_SEND_WAKE);
-
-    // Stack: (10 ms + 0.6 ms) per device
-    delayMicroseconds(10600UL * NUM_DEVICES);   // 127.2 ms; or delay(130)
-}
-
-// Message Type Definitions
-/*
-// Single
-#define SINGLE_READ_VAL         0x80    
-#define SINGLE_WRITE_VAL        0x90    
-// Stack
-#define STACK_READ_VAL          0xA0
-#define STACK_WRITE_VAL         0xB0
-// Broadcast
-#define BROAD_READ_VAL          0xC0
-#define BROAD_WRITE_VAL         0xD0
-#define BROAD_WRITE_REVERSE     0xE0
-*/
 
 // Build a complete write frame into buf[], return total frame length
 // dev_addr: device address
@@ -81,17 +40,17 @@ uint8_t build_write_frame(uint8_t *buf, uint8_t msgType, uint8_t dev_addr, uint1
     
     buf[i++] = (uint8_t)(reg_addr >> 8);    // register address high byte
     buf[i++] = (uint8_t)(reg_addr & 0xFF); // register address low byte
-
+    
     // Payload
     for (uint8_t j = 0; j < data_len; j++) {
         buf[i++] = data[j];
     }
-
+    
     // CRC covers everything above
     uint16_t crc = crc_compute(buf, i);
     buf[i++] = (uint8_t)(crc & 0xFF);    // CRC low byte first
     buf[i++] = (uint8_t)((crc >> 8) & 0xFF); // CRC high byte
-
+    
     return i; // total frame length
 }
 
@@ -110,80 +69,20 @@ uint8_t build_read_frame(uint8_t *buf, uint8_t msgType, uint8_t dev_addr, uint16
     
     buf[i++] = (uint8_t)(reg_addr >> 8);    // register address high byte
     buf[i++] = (uint8_t)(reg_addr & 0xFF); // register address low byte
-
+    
     buf[i++] = bytes_request;
-
+    
     // CRC covers everything above
     uint16_t crc = crc_compute(buf, i);
     buf[i++] = (uint8_t)(crc & 0xFF);    // CRC low byte first
     buf[i++] = (uint8_t)((crc >> 8) & 0xFF); // CRC high byte
-
+    
     return i; // total frame length
 }
 
 void sendFrame(uint8_t* frame, uint8_t len) {
     UART_SERIAL.write(frame, len);
 }
-
-//===================================
-// coner's work
-//===================================
-//placeholders
-void readVoltages(){
-    //TODO: do it.    
-}
-
-void readTemps() {
-    //TODO: read like a book.
-}
-
-void readFaultFlags() {
-    //double check faults that get sent
-}
-
-void rebalanceVoltages(){
-    //TODO: well figure out how to write first
-}
-
-// static BqResponse resp;
-// static_assert(TOTAL_DEVICES <= BQ_MAX_DEVICES, "Raise BQ_MAX_DEVICES (here and in bq79616.cpp)");
-// static bool balancing = false;
-
-// Read exactly n bytes, or give up at the deadline so a dead board can't hang the code.
-static bool readExact(uint8_t *buf, size_t n, uint32_t deadline_ms) {
-    size_t got = 0;
-    while (got < n) {
-        if (UART_SERIAL.available()) buf[got++] = (uint8_t)UART_SERIAL.read();
-        else if ((int32_t)(millis() - deadline_ms) > 0) return false;
-    }
-    return true;
-}
-
-// Collect up to `expected_frames` replies of `nbytes` data bytes each.
-// Reply frame: [len-1][dev][reg_H][reg_L][data x len][CRC_L][CRC_H]
-// Returns how many valid (CRC-checked) replies arrived.
-int bqReadResponse(uint8_t nbytes, int expected_frames, BqResponse *out, uint32_t timeout_ms) {
-    for (int i = 0; i < BQ_MAX_DEVICES; i++) out->valid[i] = false;
-    out->num_valid = 0;
-
-    uint32_t deadline = millis() + timeout_ms;
-    uint8_t frame[BQ_MAX_RESP_BYTES + 6];
-
-    for (int k = 0; k < expected_frames; k++) {
-        if (!readExact(frame, 1, deadline)) break;
-        if (frame[0] & 0x80) { k--; continue; }            // not a reply start byte, resync
-        size_t dlen  = (size_t)(frame[0] & 0x7F) + 1;
-        size_t total = dlen + 6;
-        if (!readExact(frame + 1, total - 1, deadline)) break;
-        if (crc_compute(frame, total) != 0) continue;      // CRC over whole frame = 0 if intact
-        uint8_t addr = frame[1] & 0x3F;
-        if (addr >= BQ_MAX_DEVICES || dlen != nbytes) continue;
-        memcpy(out->data[addr], frame + 4, dlen);
-        if (!out->valid[addr]) { out->valid[addr] = true; out->num_valid++; }
-    }
-    return out->num_valid;
-}
-
 
 // Write 1-8 bytes. msgType = SINGLE_WRITE_VAL / STACK_WRITE_VAL / BROAD_WRITE_VAL.
 bool bqWrite(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, const uint8_t *data, uint8_t data_len) {
@@ -210,42 +109,110 @@ int bqRead(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, uint8_t nbytes,
     return bqReadResponse(nbytes, expected_frames, out, timeout_ms);
 }
 
-// Assumes: TOTAL_DEVICES = NUM_STACK_DEVICES + 1 (BQ79600 bridge = addr 0, BQ79616s = 1..N)
-// Assumes helpers STACK_READ_VAL / SINGLE_READ_VAL exist alongside BROAD_WRITE_VAL etc.
-// Assumes `resp` is indexed by the device address in each response frame.
+// Read exactly n bytes, or give up at the deadline so a dead board can't hang the code.
+static bool readExact(uint8_t *buf, size_t n, uint32_t deadline_ms) {
+    size_t got = 0;
+    while (got < n) {
+        if (UART_SERIAL.available()) buf[got++] = (uint8_t)UART_SERIAL.read();
+        else if ((int32_t)(millis() - deadline_ms) > 0) return false;
+    }
+    return true;
+}
 
-#define TOTAL_DEVICES 13
-#define NUM_STACK_DEVICES 12
+// Collect up to `expected_frames` replies of `nbytes` data bytes each.
+// Reply frame: [len-1][dev][reg_H][reg_L][data x len][CRC_L][CRC_H]
+// Returns how many valid (CRC-checked) replies arrived.
+int bqReadResponse(uint8_t nbytes, int expected_frames, BqResponse *out, uint32_t timeout_ms) {
+    for (int i = 0; i < BQ_MAX_DEVICES; i++) out->valid[i] = false;
+    out->num_valid = 0;
+    
+    uint32_t deadline = millis() + timeout_ms;
+    uint8_t frame[BQ_MAX_RESP_BYTES + 6];
+    
+    for (int k = 0; k < expected_frames; ) {
+        if (!readExact(frame, 1, deadline)) { break; }
+        if (frame[0] & 0x80) { continue; }                     // not a reply start byte, resync
+        
+        size_t dlen  = (size_t)(frame[0] & 0x7F) + 1;
+        if (dlen > BQ_MAX_RESP_BYTES) continue;            // would overflow frame[], resync
+        size_t total = dlen + 6;
+        if (!readExact(frame + 1, total - 1, deadline)) { break; }
+        if (crc_compute(frame, total) != 0) { continue; }      // bad CRC, don't count it
+        uint8_t addr = frame[1] & 0x3F;
+        if (addr >= BQ_MAX_DEVICES || dlen != nbytes) { continue; }
+        memcpy(out->data[addr], frame + 4, dlen);
+        if (!out->valid[addr]) { out->valid[addr] = true; out->num_valid++; }
+        k++;                                               // only count good frames
+    }
+    return out->num_valid;
+}
+
+// ---------------------------------------------------------------------------
+//                              init functions
+// ---------------------------------------------------------------------------
+
+void wakePing() {
+    UART_SERIAL.flush();    
+    UART_SERIAL.end();         
+    pinMode(TX_PIN, OUTPUT);
+    digitalWrite(TX_PIN, HIGH);
+    digitalWrite(TX_PIN, LOW);
+    delayMicroseconds(WAKE_PING_US);
+    digitalWrite(TX_PIN, HIGH);
+    UART_SERIAL.begin(BQ_UART_BAUD, SERIAL_8N1, RX_PIN, TX_PIN);
+    delay(4);
+}
+
+// Call once in setup(). Bigger RX buffer because a stack read from 12 boards
+// returns more than the 256-byte default.
+void bqUartInit() {
+    UART_SERIAL.setRxBufferSize(2048);
+    UART_SERIAL.begin(BQ_UART_BAUD, SERIAL_8N1, RX_PIN, TX_PIN);
+}
+
+// Throw away any old bytes so they aren't mistaken for a new reply.
+void bqFlushRx() {
+    while (UART_SERIAL.available()) UART_SERIAL.read();
+}
+
+void bq_wake() {
+    wakePing();                        // RX low for WAKE_PING_US (tHLD_WAKE 2.5-3 ms)
+    delay(WAKE_SETTLE_MS);             // > tSU(WAKE_SHUT) max 3.5 ms
+    wakePing();                        // second ping
+    delay(1);                          // > tRST 600 us before first frame
+    
+    bqWrite1(SINGLE_WRITE_VAL, 0, REG_CONTROL1, CONTROL1_SEND_WAKE);
+    
+    delay(STACK_WAKE_MS);              // wake tone ripples through all stack devices
+}
 
 bool bq_auto_address() {
-//   static_assert(TOTAL_DEVICES == NUM_STACK_DEVICES + 1,
-//                 "TOTAL_DEVICES must be bridge + stack devices");
-    // Step 1: dummy broadcast write 0x00 to ECC_DATA1..8 (sync DLL, write direction)
-    uint8_t zeros[8] = {0};
-    bqWrite(BROAD_WRITE_VAL, 0, REG_OTP_ECC_DATAIN1, zeros, 8);
-    delay(1);
-
+    static_assert(TOTAL_DEVICES == NUM_STACK_DEVICES + 1, "TOTAL_DEVICES must be bridge + stack devices");
+    
+    // Step 1: dummy STACK write 0x00 to 0x343..0x34A, 8 separate 1-byte writes (DLL sync)
+    for (uint16_t i = 0; i < 8; i++) {
+        bqWrite1(STACK_WRITE_VAL, 0, REG_OTP_ECC_DATAIN1 + i, 0x00);
+    }
+    
     // Step 2: enable auto-addressing
     bqWrite1(BROAD_WRITE_VAL, 0, REG_CONTROL1, CONTROL1_ADDR_WR);
-
-    // Step 3: broadcast consecutive addresses. Bridge = 0, 616s = 1..N.
+    
+    // Step 3: consecutive addresses, bridge = 0, 616s = 1..12
     for (uint8_t a = 0; a < TOTAL_DEVICES; a++) {
         bqWrite1(BROAD_WRITE_VAL, 0, REG_DIR0_ADDR, a);
     }
-
-    // Step 4: all stack devices, then top of stack.
-    // The BQ79600 bridge has no COMM_CTRL register and is base by default,
-    // so it gets no COMM_CTRL write.
-    bqWrite1(BROAD_WRITE_VAL, 0, REG_COMM_CTRL, COMM_CTRL_STACK_DEV);
-    bqWrite1(SINGLE_WRITE_VAL, NUM_STACK_DEVICES, REG_COMM_CTRL,
-             COMM_CTRL_STACK_DEV | COMM_CTRL_TOP_STACK);
-
-    // Step 5: dummy read of ECC_DATA1..8 (sync DLL, read direction).
-    // STACK read, not broadcast: the bridge datasheet forbids broadcast reads.
-    // Missing responses here are normal.
-    bqRead(STACK_READ_VAL, 0, REG_OTP_ECC_DATAIN1, 8, NUM_STACK_DEVICES, &resp, 20);
-
-    // Step 7: read back DIR0_ADDR from every stack device (stack read -> 616s only)
+    
+    // Step 4: stack devices, then top of stack (bridge is base by default, has no COMM_CTRL)
+    bqWrite1(BROAD_WRITE_VAL, 0, REG_COMM_CTRL, 0x02);
+    bqWrite1(SINGLE_WRITE_VAL, NUM_STACK_DEVICES, REG_COMM_CTRL, 0x03);
+    
+    // Step 5: dummy STACK read of 0x343..0x34A, one command per register (DLL sync).
+    // Result ignored on purpose; some responses may not arrive.
+    for (uint16_t i = 0; i < 8; i++) {
+        bqRead(STACK_READ_VAL, 0, REG_OTP_ECC_DATAIN1 + i, 1, NUM_STACK_DEVICES, &resp, 20);
+    }
+    
+    // Step 7: verify addresses of all 12 stack devices
     int n = bqRead(STACK_READ_VAL, 0, REG_DIR0_ADDR, 1, NUM_STACK_DEVICES, &resp, 20);
     bool ok = (n == NUM_STACK_DEVICES);
     for (int a = 1; a <= NUM_STACK_DEVICES; a++) {
@@ -253,17 +220,33 @@ bool bq_auto_address() {
         Serial.printf("[BQ] device %d: %s\n", a, good ? "OK" : "MISSING/WRONG");
         ok &= good;
     }
-
-    // Bridge isn't part of a stack read, so check it with a single device read
-    int nb = bqRead(SINGLE_READ_VAL, 0, REG_DIR0_ADDR, 1, 1, &resp, 20);
-    bool bridgeGood = (nb == 1) && resp.valid[0] && (resp.data[0][0] & 0x3F) == 0;
+    
+    // Bridge: not part of a stack read. Datasheet check is DEV_CONF1 (0x2001) == 0x14.
+    int nb = bqRead(SINGLE_READ_VAL, 0, REG_DEV_CONF1_600, 1, 1, &resp, 20);
+    bool bridgeGood = (nb == 1) && resp.valid[0] && resp.data[0][0] == 0x14;
     Serial.printf("[BQ] device 0 (bridge): %s\n", bridgeGood ? "OK" : "MISSING/WRONG");
     ok &= bridgeGood;
-
-    // Step 8: DLL sync can leave comm faults latched, so clear them.
-    uint8_t ff[2] = {0xFF, 0xFF};
-    bqWrite(STACK_WRITE_VAL, 0, REG_FAULT_RST1, ff, 2);       // FAULT_RST1 (0x331) + FAULT_RST2 (0x332)
-    bqWrite1(SINGLE_WRITE_VAL, 0, REG_FAULT_RST_600, 0xFF);   // bridge FAULT_RST (0x2030)
-
+    
+    // Step 8: clear faults latched by the DLL sync
+    uint8_t ff[2] = {0xFF, 0x7F};                             // bit 7 of FAULT_RST2 is reserved
+    bqWrite(STACK_WRITE_VAL, 0, REG_FAULT_RST1, ff, 2);       // 0x331 + 0x332
+    bqWrite1(SINGLE_WRITE_VAL, 0, REG_FAULT_RST_600, 0xFF);   // bridge 0x2030
+    
     return ok;
+}
+
+// ---------------------------------------------------------------------------
+//                          Cell Data reading
+// ---------------------------------------------------------------------------
+
+void readVoltages(){
+    //TODO: do it.    
+}
+
+void readTemps() {
+    //TODO: read like a book.
+}
+
+void readFaultFlags() {
+    //double check faults that get sent
 }

@@ -8,7 +8,6 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "bq_constants.h"
-#include "bq_init.h"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -20,6 +19,8 @@ struct BqResponse {
     bool    valid[BQ_MAX_DEVICES];
     int     num_valid;
 };
+
+static BqResponse resp;
 
 // ---------------------------------------------------------------------------
 // CRC
@@ -64,9 +65,6 @@ static const uint16_t crc_table[256] = {
 // CRC-16 (datasheet p56). Running it over a complete, intact frame returns 0.
 uint16_t crc_compute(const uint8_t *data, size_t length);
 
-void bq_wake();
-bool bq_auto_address();
-
 // ---------------------------------------------------------------------------
 // Frame builders (return total frame length, 0 on error)
 // ---------------------------------------------------------------------------
@@ -92,17 +90,24 @@ void sendFrame(uint8_t *frame, uint8_t len);
 int bqReadResponse(uint8_t nbytes, int expected_frames, BqResponse *out, uint32_t timeout_ms);
 
 // Write 1-8 bytes. msgType = SINGLE_/STACK_/BROAD_WRITE_VAL.
-bool bqWrite(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr,
-             const uint8_t *data, uint8_t data_len);
+bool bqWrite(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, const uint8_t *data, uint8_t data_len);
 bool bqWrite1(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, uint8_t value);
 
 // Read nbytes (real count, 1-128) and collect replies.
 // msgType = SINGLE_/STACK_/BROAD_READ_VAL.
-int bqRead(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, uint8_t nbytes,
-           int expected_frames, BqResponse *out, uint32_t timeout_ms);
+int bqRead(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, uint8_t nbytes, int expected_frames, BqResponse *out, uint32_t timeout_ms);
 
 // ---------------------------------------------------------------------------
-// Application-level (placeholders, still TODO)
+// BQ init functions
+// ---------------------------------------------------------------------------
+void bq_wake();
+void bqUartInit(); // Call once in setup(). Enlarges the RX buffer for stack reads.
+void wakePing(); // wake ping 
+void bqFlushRx(); // Discard any stale bytes before a new read.
+bool bq_auto_address();
+
+// ---------------------------------------------------------------------------
+// Application-level
 // ---------------------------------------------------------------------------
 void readVoltages();
 void readTemps();
