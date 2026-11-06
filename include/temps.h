@@ -4,13 +4,10 @@
 
 #include <stdint.h>
 
-//resistance decrease when temps increase?
-
-//old plan:
-// read voltage -> determine resistance -> determine temps -> return
-
-// dont need a different read voltage bc voltage divider built into chip, so i can get resistance directly
-
 int16_t getTemp();
+
+// main file currently using read/write from example code. probably wont work bc its not UART 
+// bq79616.cpp has part of a read func. but not complete. plan to replace when done
+// SpiReadReg(<cmu ID>, <register address>, <buffer>, <# of bytes>, <max waiting time>, <read type>)
 
 #endif
