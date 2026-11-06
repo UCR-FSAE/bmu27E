@@ -1,80 +1,53 @@
 #include "temps.h"
 #include <Arduino.h>
 #include <stdint.h>
+#include <math.h>
 
 // ---=== BASIC PLAN
-// get resistance using formula?: (GPIO_ADC / TSREF_ADC) = RNTC / (RNTC + R1)
-// there's a built in voltage divider that lets us solve for resistance
-// GPIO and TSREF values need to be converted to microvolts?
-
-// evan doesnt think we need specific thermistor values? as in properties not read values
-// if i need to know anything hardware related it will be on altium
-// figure out how the old code works to see if applicable
+// get resistance using formula?: res = R_CONST * gpio_uv / (tsref_uv - gpio_uv);
+// old thermistor code uses steinhart formula w/ the 3 coefficients A, B, C.
+// find out what thermistor values are from altium? elias needs to add me.
+// evan needs to meet w/ other teams during scope meeting to figure this out but assume old stuff still being used for now
 
 
-// ---=== WHAT EACH VALUE REPRESENTS
-// GPIO_ADC = raw ADC code from GPIO pin, node between R1 and thermistor. comes from GPIO*_HI/LO
-// TSREF_ADC = raw ADC code from TSREF pin. from TSREF_HI/LO register
-// RNTC = thermistor resisance im looking for
-// R1 = known fixed pullup resistor between TSREF and GPIO. something we put in ourselves?
-#define R1 = 10000.0f // BASED ON SOMETHING THAT PHYSICALLY EXISTS. CHANGE LATER?
+// ---=== STEINHART NUMBERS
+// STEIN_<A-C> = based on thermistor material/manufacturing process. likely different for the current thermistor?
+// R_CONST = known fixed pullup resistor between TSREF and GPIO. old therm said 10k ohms, might be different now?
+#define STEIN_A 1.1395e-3f
+#define STEIN_B 2.3230e-4f
+#define STEIN_C 9.5816e-8f
+#define R_CONST 10000.0f // BASED ON SOMETHING THAT PHYSICALLY EXISTS. CHANGE LATER? 
 
 
-// ---=== FROM THAT BULLSHIT AI FORMULA
-// --- could use stein-something instead? but that needed 3 coefficients? compare to the old code
-// all subject to change based on real thermistor values
-#define BETA = 3950.0f // "constant from thermistor datasheet describing material's curve"
-#define T0 = 298.15f // "reference temperature, always 25*C"
-#define R25 = 10000.0f // "thermistor resistance at 25*C." obviously being replaced later
+float getTemp(uint16_t deviceID){
+	// need buffer b/c spi read gives one byte at a time
+	uint8_t buffer[2];
 
-//get voltage & calculate based on that?
-//helps readTemps
-static float getResistance(){
-	//read gpio & tsref voltages from bq79616 registers
-	// i saw spi read/writes in the sample code can we transfer those here?
+	// raw values from bq pins
+	uint16_t gpio_raw = 0;
+	uint16_t tsref_raw = 0;
 
-	//convert both values to microvolts for resistance formula
+ 	// read from gpio and tsref registers
+	// SpitReadReg from example code is placeholder for actual register read func.
+	SpiReadReg(deviceID, 0x058E, buf, 2, 100, 0x00);	// GPIO hi/lo. does single device read.
+    gpio_raw = (buffer[0] << 8) | buffer[1];
 
-	//calulate resistance
-	float res = R1 * GPIO_ADC / (TSREF_ADC - GPIO_ADC);
+    SpiReadReg(deviceID, 0x058C, buf, 2, 100, 0x00); 	// TSREF hi/lo
+    tsref_raw = (buffer[0] << 8) | buffer[1];
 
-	//return value
-	return res;
-}
+	// gpio and tsref converted to microvolts
+	// 2's compliment multiplied by scaling value from bq79616 datasheet
+    float gpio_uV  = (float)(int16_t)gpio_raw * 152.59f;	// 152.59 is for GPIO*_HI/LO
+    float tsref_uV = (float)(int16_t)tsref_raw * 169.54f; 	// 169.54 is for TSREF_HI/LO
 
+	if (gpio_uV <= 0.0f || gpio_uV >= tsref_uV) return 0.0f;// old thermistor code considered gpio_V <= 0 || >= tsref_V as errors. returned 0.
+	
+	float res = R_CONST * gpio_uV / (tsref_uV - gpio_uV); 	// calculate resistance
 
-float getTemp(){
-	//get resistance
-	float RNTC = getResistance();
-
-	//using a formula that's supposedly widely used? a beta formula? 
-	// 1/T = 1/T0 + (1/β) × ln(RNTC / R25)
-	float invTemp = 1/T0 + (1/BETA) * ln(RNTC/R25);
-	float temp = 1/invTemp;
+	// use steinhart to calculate temperature
+	float ln_res = logf(res);
+	float invTemp = STEIN_A + STEIN_B * ln_res + STEIN_C * ln_res * ln_res * ln_res; 	// 1/T = A + B·ln(R) + C·(ln(R))³
+	float temp = 1.0f / invTemp - 273.15f; 												// - 273 to get temps in C. Steinhart gives Kelvin.
 
 	return temp;
-	
-	retrurn 0;
 }
-
-// ---=== OLD THERMISTOR CODE
-// --- he doesnt think we need to know the specifics of the component to get the temps? 
-// --- but everything has changed since then so idk if this will work
-// --- should try to decode this to see how this works? if it's still applicable?
-
-
-// static float read_temperature() {
-//   analogRead(ADC_PIN);
-//   delayMicroseconds(20);
-
-//   int32_t raw = 0;
-//   for (int j = 0; j < 16; j++) raw += analogRead(ADC_PIN);
-//   adcValue = raw / 16.0f;
-
-//   if (adcValue <= 0 || adcValue >= ADC_MAX) return 0.0f;
-
-//   float R = R_FIXED * adcValue / (ADC_MAX - adcValue);
-//   float lnR = logf(R);
-//   float inv_T = SH_A + SH_B * lnR + SH_C * lnR * lnR * lnR;
-//   return 1.0f / inv_T - 273.15f;
-// }
