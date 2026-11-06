@@ -80,16 +80,17 @@ uint8_t build_read_frame(uint8_t *buf, uint8_t msgType, uint8_t dev_addr, uint16
     return i; // total frame length
 }
 
-void sendFrame(uint8_t* frame, uint8_t len) {
-    UART_SERIAL.write(frame, len);
-}
+// Not needed, here just in case we need in the future but for now ignore
+// void sendFrame(uint8_t* frame, uint8_t len) {
+//     UART_SERIAL.write(frame, len);
+// }
 
 // Write 1-8 bytes. msgType = SINGLE_WRITE_VAL / STACK_WRITE_VAL / BROAD_WRITE_VAL.
 bool bqWrite(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, const uint8_t *data, uint8_t data_len) {
     uint8_t buf[16];
     uint8_t len = build_write_frame(buf, msgType, dev_addr, reg_addr, data, data_len);
     if (len == 0) return false;
-    sendFrame(buf, len);
+    UART_SERIAL.write(buf, len);
     return true;
 }
 
@@ -97,16 +98,26 @@ bool bqWrite1(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, uint8_t valu
     return bqWrite(msgType, dev_addr, reg_addr, &value, 1);
 }
 
-// Read `nbytes` (real count, 1-128) and collect the replies.
-// msgType = SINGLE_READ_VAL / STACK_READ_VAL / BROAD_READ_VAL.
-int bqRead(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, uint8_t nbytes,
-           int expected_frames, BqResponse *out, uint32_t timeout_ms) {
-    if (nbytes < 1 || nbytes > BQ_MAX_RESP_BYTES) return 0;
+// Single attempt: flush, send, collect.
+BmsStatus_t bqReadOnce(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, uint8_t nbytes,
+                       int expected_frames, BqResponse *out, uint32_t timeout_ms) {
+    if (nbytes < 1 || nbytes > BQ_MAX_RESP_BYTES) return BMS_ERR_PARAM;   // see note below
     uint8_t buf[16];
-    bqFlushRx();
-    uint8_t len = build_read_frame(buf, msgType, dev_addr, reg_addr, nbytes - 1);  // frame wants bytes - 1
-    sendFrame(buf, len);
+    bqFlushRx();                                   // also discards leftovers from a failed attempt
+    uint8_t len = build_read_frame(buf, msgType, dev_addr, reg_addr, nbytes - 1);
+    UART_SERIAL.write(buf, len);
     return bqReadResponse(nbytes, expected_frames, out, timeout_ms);
+}
+
+// Same, but re-requests when the CRC was bad.
+BmsStatus_t bqRead(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, uint8_t nbytes,
+                   int expected_frames, BqResponse *out, uint32_t timeout_ms) {
+    BmsStatus_t st = BMS_ERR_TIMEOUT;
+    for (uint8_t attempt = 0; attempt <= BQ_MAX_RETRIES; attempt++) {
+        st = bqReadOnce(msgType, dev_addr, reg_addr, nbytes, expected_frames, out, timeout_ms);
+        if (st != BMS_ERR_CRC) return st;          // OK or a non-retryable error
+    }
+    return st;                                     // still BMS_ERR_CRC after all retries
 }
 
 // Read exactly n bytes, or give up at the deadline so a dead board can't hang the code.
@@ -122,29 +133,32 @@ static bool readExact(uint8_t *buf, size_t n, uint32_t deadline_ms) {
 // Collect up to `expected_frames` replies of `nbytes` data bytes each.
 // Reply frame: [len-1][dev][reg_H][reg_L][data x len][CRC_L][CRC_H]
 // Returns how many valid (CRC-checked) replies arrived.
-int bqReadResponse(uint8_t nbytes, int expected_frames, BqResponse *out, uint32_t timeout_ms) {
+BmsStatus_t bqReadResponse(uint8_t nbytes, int expected_frames, BqResponse *out, uint32_t timeout_ms) {
     for (int i = 0; i < BQ_MAX_DEVICES; i++) out->valid[i] = false;
-    out->num_valid = 0;
+    out->num_valid  = 0;
+    out->crc_errors = 0; 
     
     uint32_t deadline = millis() + timeout_ms;
     uint8_t frame[BQ_MAX_RESP_BYTES + 6];
     
     for (int k = 0; k < expected_frames; ) {
         if (!readExact(frame, 1, deadline)) { break; }
+
         if (frame[0] & 0x80) { continue; }                     // not a reply start byte, resync
-        
         size_t dlen  = (size_t)(frame[0] & 0x7F) + 1;
         if (dlen > BQ_MAX_RESP_BYTES) continue;            // would overflow frame[], resync
         size_t total = dlen + 6;
         if (!readExact(frame + 1, total - 1, deadline)) { break; }
-        if (crc_compute(frame, total) != 0) { continue; }      // bad CRC, don't count it
+        if (crc_compute(frame, total) != 0) { out->crc_errors++; continue; }     // bad CRC, don't count it
         uint8_t addr = frame[1] & 0x3F;
         if (addr >= BQ_MAX_DEVICES || dlen != nbytes) { continue; }
         memcpy(out->data[addr], frame + 4, dlen);
         if (!out->valid[addr]) { out->valid[addr] = true; out->num_valid++; }
         k++;                                               // only count good frames
     }
-    return out->num_valid;
+
+    if (out->num_valid >= expected_frames) return BMS_OK;
+    return out->crc_errors ? BMS_ERR_CRC : BMS_ERR_TIMEOUT;
 }
 
 // ---------------------------------------------------------------------------

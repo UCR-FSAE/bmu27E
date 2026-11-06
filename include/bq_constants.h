@@ -24,6 +24,8 @@
 #define TOTAL_DEVICES      2
 #define NUM_STACK_DEVICES  1
 
+#define BQ_MAX_RETRIES  3        // re-requests after the first attempt
+
 #else
 
 #define TOTAL_DEVICES      13

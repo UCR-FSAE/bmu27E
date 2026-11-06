@@ -25,7 +25,6 @@ Outputs         out;
 #define BQ616_DIR0_ADDR_REG 0x0306   // device address
 #define BQ616_PARTID_REG    0x0500   // 0x21 = BQ79616
 
-static BqResponse resp;
 static bool addrOk = false;
 
 // Stack-read one byte from every 616 and check it against `expected`.
@@ -53,8 +52,7 @@ void setup() {
     digitalWrite(LED_BUILTIN, HIGH);
     
     Serial.begin(115200);
-    delay(2000);                       // give USB-CDC time to enumerate
-    Serial.printf("\n=== BQ79600 + %dx BQ79616 wake / auto-address test ===\n", NUM_STACK_DEVICES);
+    delay(2000);                       
 
     bqUartInit();
     delay(10);
@@ -71,25 +69,4 @@ void loop() {
         prevMillis = now;
         digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
     }
-
-    static uint32_t count = 0;
-    Serial.printf("\n--- check %lu ---\n", (unsigned long)count++);
-
-    // Bridge: single read
-    int nb = bqRead(SINGLE_READ_VAL, 0, BRIDGE_PARTID_REG, 1, 1, &resp, 20);
-    bool bridgeOk = (nb == 1) && resp.valid[0];
-    Serial.printf("  bridge PARTID: %s (0x%02X)\n", bridgeOk ? "OK" : "NO REPLY",
-                  bridgeOk ? resp.data[0][0] : 0);
-
-    // Stack: every 616 must answer with its own address, and with PARTID 0x21
-    bool addrGood = checkStack("DIR0_ADDR", BQ616_DIR0_ADDR_REG, -1,   0x3F);
-    bool idGood   = checkStack("PARTID   ", BQ616_PARTID_REG,    0x21, 0xFF);
-
-    if (bridgeOk && addrGood && idGood) {
-        Serial.printf("RESULT: ALL %d + BRIDGE OK\n", NUM_STACK_DEVICES);
-    } else {
-        Serial.println("RESULT: PROBLEM");
-    }
-
-    delay(1000);
 }

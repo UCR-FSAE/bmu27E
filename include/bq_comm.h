@@ -14,11 +14,20 @@
 // ---------------------------------------------------------------------------
 // Replies stored by the device address inside each reply
 // (0 = BQ79600, 1..N = BQ79616s).
-struct BqResponse {
+typedef struct {
     uint8_t data[BQ_MAX_DEVICES][BQ_MAX_RESP_BYTES];
     bool    valid[BQ_MAX_DEVICES];
     int     num_valid;
-};
+    int     crc_errors;      // NEW: bad-CRC frames seen during this read
+} BqResponse;
+
+typedef enum {
+    BMS_OK = 0,
+    BMS_ERR_TIMEOUT,    // no response (device asleep, wiring, broken daisy chain)
+    BMS_ERR_CRC,        // response came back but CRC bad -> retry
+    BMS_ERR_INIT,       // wakeup / auto-address / config failed
+    BMS_ERR_FAULT       // device reports a real fault (OV/UV/OT etc.)
+} BmsStatus_t;
 
 static BqResponse resp;
 
@@ -87,15 +96,17 @@ void sendFrame(uint8_t *frame, uint8_t len);
 // ---------------------------------------------------------------------------
 // Collect up to expected_frames replies of nbytes data bytes each.
 // Returns the number of valid (CRC-checked) replies.
-int bqReadResponse(uint8_t nbytes, int expected_frames, BqResponse *out, uint32_t timeout_ms);
+BmsStatus_t bqReadResponse(uint8_t nbytes, int expected_frames, BqResponse *out, uint32_t timeout_ms);
 
 // Write 1-8 bytes. msgType = SINGLE_/STACK_/BROAD_WRITE_VAL.
 bool bqWrite(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, const uint8_t *data, uint8_t data_len);
 bool bqWrite1(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, uint8_t value);
 
+BmsStatus_t bqReadOnce(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, uint8_t nbytes,
+                       int expected_frames, BqResponse *out, uint32_t timeout_ms);
 // Read nbytes (real count, 1-128) and collect replies.
 // msgType = SINGLE_/STACK_/BROAD_READ_VAL.
-int bqRead(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, uint8_t nbytes, int expected_frames, BqResponse *out, uint32_t timeout_ms);
+BmsStatus_t bqRead(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, uint8_t nbytes, int expected_frames, BqResponse *out, uint32_t timeout_ms);
 
 // ---------------------------------------------------------------------------
 // BQ init functions
