@@ -182,14 +182,16 @@ void readVoltages(){
 
   const int frameSize = 4 + BQ_CELLS_PER_DEVICE * 2 + 2;
 
-  // TODO:this could be elsewhere, unsure if we need to start UART within function
-  static bool uartStarted = false;
-  if (!uartStarted) {
-    UART_SERIAL.setRxBufferSize(512);
-    UART_SERIAL.begin(BQ_UART_BAUD, SERIAL_8N1, RX_PIN, TX_PIN);
-    UART_SERIAL.setTimeout(20); // # of ms readBytes() waits
-    uartStarted = true;
-  }
+
+//  NOTE: uart starter, this should be elsewhere
+
+//  static bool uartStarted = false;
+//  if (!uartStarted) {
+//    UART_SERIAL.setRxBufferSize(512);
+//    UART_SERIAL.begin(BQ_UART_BAUD, SERIAL_8N1, RX_PIN, TX_PIN);
+//    UART_SERIAL.setTimeout(20); // # of ms readBytes() waits
+//    uartStarted = true;
+//  }
 
   voltageReadings.valid = false;
 
@@ -198,7 +200,7 @@ void readVoltages(){
 
   while (UART_SERIAL.available()) UART_SERIAL.read();
   uint8_t command[6];
-  // TODO math could be wrong here, need to ask again about CMU implementation
+  // NOTE: dependent on cmu configuration
   uint16_t startRegister = 0x0568 + (16 - BQ_CELLS_PER_DEVICE) * 2;
   uint8_t length = build_read_frame(command, STACK_READ_VAL, 0, startRegister, BQ_CELLS_PER_DEVICE * 2 - 1);
 
