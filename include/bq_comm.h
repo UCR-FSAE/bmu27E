@@ -26,7 +26,8 @@ typedef enum {
     BMS_ERR_TIMEOUT,    // no response (device asleep, wiring, broken daisy chain)
     BMS_ERR_CRC,        // response came back but CRC bad -> retry
     BMS_ERR_INIT,       // wakeup / auto-address / config failed
-    BMS_ERR_FAULT       // device reports a real fault (OV/UV/OT etc.)
+    BMS_ERR_FAULT,       // device reports a real fault (OV/UV/OT etc.)
+    BMS_ERR_PARAM       // sending read request, requesting too many or too little bytes 
 } BmsStatus_t;
 
 static BqResponse resp;

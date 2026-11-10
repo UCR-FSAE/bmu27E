@@ -30,9 +30,10 @@ static bool addrOk = false;
 // Stack-read one byte from every 616 and check it against `expected`.
 // expected == -1 means "expect the device's own address" (used for DIR0_ADDR).
 static bool checkStack(const char *name, uint16_t reg, int expected, uint8_t mask) {
-    int n = bqRead(STACK_READ_VAL, 0, reg, 1, NUM_STACK_DEVICES, &resp, 20);
-    bool ok = (n == NUM_STACK_DEVICES);
-    Serial.printf("  %s: got %d/%d replies\n", name, n, NUM_STACK_DEVICES);
+    BmsStatus_t st = bqRead(STACK_READ_VAL, 0, reg, 1, NUM_STACK_DEVICES, &resp, 20);
+    bool ok = (st == BMS_OK);
+    Serial.printf("  %s: got %d/%d replies (status %d, %d CRC errors)\n",
+                  name, resp.num_valid, NUM_STACK_DEVICES, (int)st, resp.crc_errors);
     for (int a = 1; a <= NUM_STACK_DEVICES; a++) {
         int want = (expected < 0) ? a : expected;
         bool good = resp.valid[a] && (resp.data[a][0] & mask) == want;
