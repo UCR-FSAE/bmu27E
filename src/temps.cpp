@@ -9,6 +9,10 @@
 // find out what current thermistor values are from altium
 // evan needs to meet w/ other teams during scope meeting to figure this out but assume old stuff still being used for now
 
+read_temps(){
+	request from device 1, 2, etc.
+}
+
 
 // ---=== STEINHART NUMBERS
 // STEIN_<A-C> = based on thermistor material/manufacturing process. likely different for the current thermistor?
@@ -19,7 +23,47 @@
 #define R_CONST 10000.0f // BASED ON SOMETHING THAT PHYSICALLY EXISTS. CHANGE LATER? 
 
 
-float getTemp(uint16_t deviceID){
+
+/* ---=== 11.6.26 NOTES
+helper func, put wrapper that reads through everything using this
+look through other schools and see how they display temps (highest of indivual CMUs or averages?)
+BMS stores temps of all devices, displays highest? put in struct
+output to CAN is for someone els
+
+novermber deadline testing extended
+remember to fill out how i followed the ruleset
+
+make all of my code non-blocking. it's like asynch waiting where u interrupt when the flag is true 
+evan doesnt know how to approach off the top of his head, look into it urself?
+uart mailbox? bmu is call/response by default which we dont want? 
+
+--- interrupt driven: doesnt matter
+basically start serial periph (evan does it and tells me why its significant later)
+setup so that anytime hardware gets message, call "on recievie"  function.
+onreceive "when u get message over UART. does whatever u want though"
+ideally onreceive dumps everything into a struct/buffer/something short for low latency
+
+and thats all it does. later down the line, reading from device is really just reading from this struct
+basically dont access device directly, get a snapshot based on interrupt driven on recive we get
+better than polling (wasteful). mailbox could get full
+
+// evan writes this code
+// the struct is something I read in the future
+// struct has command frame. raw hex that I decipher
+*/
+
+// ---=== MAIN THING IDK
+/*
+ 	can i do stack read for cell temps? (datasheet maybe)
+	report back on this next week
+	evan will.............. work on getting interrupt thing struct 
+*/
+
+// ---=== GET TEMP
+// helper func for eventual readTemps()
+// either single read that's looped 12 times in the wrapper or a stack read for all
+// need to reformat to use evan's interrupt-driven non-blocking struct. later.
+float getTemp(uint16_t deviceID, uint8_t GPIOHIAddr){
 	// need buffer b/c spi read gives one byte at a time
 	uint8_t buffer[2];
 
@@ -29,10 +73,14 @@ float getTemp(uint16_t deviceID){
 
  	// read from gpio and tsref registers
 	// SpitReadReg from example code is placeholder for actual register read func.
+	// but alter later to deal w the OnRead struct thing
+	// actually hard code reading all 12 in the same function
+
+	
 	SpiReadReg(deviceID, 0x058E, buf, 2, 100, 0x00);	// GPIO hi/lo. does single device read.
     gpio_raw = (buffer[0] << 8) | buffer[1];
 
-    SpiReadReg(deviceID, 0x058C, buf, 2, 100, 0x00); 	// TSREF hi/lo
+    SpiReadReg(deviceID, 0x058C, buf, 2, 100, 0x00); 	// TSREF hi/lo. but stack read is better?
     tsref_raw = (buffer[0] << 8) | buffer[1];
 
 	// gpio and tsref converted to microvolts
