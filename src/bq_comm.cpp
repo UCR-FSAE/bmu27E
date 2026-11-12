@@ -69,9 +69,9 @@ uint16_t crc_compute(const uint8_t *data, size_t length)
 }
 
 // Build a complete write frame into buf[], return total frame length
-// dev_addr: device address
+// dev_addr: device ad
 // msgType:    frame type
-// reg_addr: register address (2 bytes for BQ79616)
+// reg_addr: register ad (2 bytes for BQ79616)
 // data:         payload bytes
 // data_len: number of payload bytes (0–8)
 uint8_t build_write_frame(uint8_t *buf, uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, const uint8_t *data, uint8_t data_len)
@@ -85,10 +85,10 @@ uint8_t build_write_frame(uint8_t *buf, uint8_t msgType, uint8_t dev_addr, uint1
     if (msgType == SINGLE_WRITE_VAL)
     {
         buf[i++] = dev_addr;
-    } // device address
+    } // device ad
 
-    buf[i++] = (uint8_t)(reg_addr >> 8);   // register address high byte
-    buf[i++] = (uint8_t)(reg_addr & 0xFF); // register address low byte
+    buf[i++] = (uint8_t)(reg_addr >> 8);   // register ad high byte
+    buf[i++] = (uint8_t)(reg_addr & 0xFF); // register ad low byte
 
     // Payload
     for (uint8_t j = 0; j < data_len; j++)
@@ -105,9 +105,9 @@ uint8_t build_write_frame(uint8_t *buf, uint8_t msgType, uint8_t dev_addr, uint1
 }
 
 // Build a complete read frame into buf[], return total frame length
-// dev_addr: device address
+// dev_addr: device ad
 // msgType:    frame type
-// reg_addr: register address (2 bytes for BQ79616)
+// reg_addr: register ad (2 bytes for BQ79616)
 // data:     payload bytes
 // data_len: number of payload bytes (0–8)
 uint8_t build_read_frame(uint8_t *buf, uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, uint8_t bytes_request)
@@ -119,10 +119,10 @@ uint8_t build_read_frame(uint8_t *buf, uint8_t msgType, uint8_t dev_addr, uint16
     if (msgType == SINGLE_READ_VAL)
     {
         buf[i++] = dev_addr;
-    } // device address
+    } // device ad
 
-    buf[i++] = (uint8_t)(reg_addr >> 8);   // register address high byte
-    buf[i++] = (uint8_t)(reg_addr & 0xFF); // register address low byte
+    buf[i++] = (uint8_t)(reg_addr >> 8);   // register ad high byte
+    buf[i++] = (uint8_t)(reg_addr & 0xFF); // register ad low byte
 
     buf[i++] = bytes_request;
 
@@ -404,4 +404,26 @@ FaultSummary decodeSummary(uint8_t summary)
     f.system = (summary & (1u << 1)) != 0;
     f.power = (summary & 1u) != 0;
     return f;
+}
+
+BmsStatus_t readSummary(BqResponse out){
+    BmsStatus_t status = bqRead(STACK_READ_VAL, //reading from the stack to get all 10 responses at once 
+    0,
+    REG_FAULT_SMRY,
+    1,
+    10,
+    &out,
+    20
+    );
+
+    if(status != BMS_OK) // do smth
+
+    //check if each respose is valid 
+    for (int i = 1; i <= 10; ++i) {
+    if (!out.valid[i]) {
+        // do smth
+    }
+
+    return status;
+}
 }

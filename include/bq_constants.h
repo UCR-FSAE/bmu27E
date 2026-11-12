@@ -83,3 +83,6 @@
 #define WAKE_SETTLE_MS         5
 #define STACK_WAKE_PER_DEV_MS  10     // 616 from SHUTDOWN: up to 10 ms per device
 #define STACK_WAKE_MS          (NUM_STACK_DEVICES * STACK_WAKE_PER_DEV_MS + 5)
+
+// ---------------- Faults ---------------- 
+#define REG_FAULT_SMRY         0x052D

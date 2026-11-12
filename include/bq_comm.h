@@ -384,3 +384,7 @@ typedef struct
     bool system;
     bool power;
 } FaultSummary;
+
+FaultSummary decodeSummary(uint8_t summary); //decodes the 8 bits summary into a boolean struct
+uint8_t readSummary();
+
