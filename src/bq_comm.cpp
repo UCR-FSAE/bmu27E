@@ -392,10 +392,16 @@ void readFaultFlags()
     // double check faults that get sent
 }
 
-// PAGE 73
-
-// Understand how to read messages from the bq
-// Understand what kind of faults are possible
-// Build a struct from it
-// Understanding where faults messages are stored and then reading from buffer
-// Parsing data into a struct object
+FaultSummary decodeSummary(uint8_t summary)
+{
+    FaultSummary f{};
+    f.protection = (summary & (1u << 7)) != 0;
+    f.comparatorADC = (summary & (1u << 6)) != 0;
+    f.otp = (summary & (1u << 5)) != 0;
+    f.communication = (summary & (1u << 4)) != 0;
+    f.overTempUnderTemp = (summary & (1u << 3)) != 0;
+    f.overVoltageUnderVoltage = (summary & (1u << 2)) != 0;
+    f.system = (summary & (1u << 1)) != 0;
+    f.power = (summary & 1u) != 0;
+    return f;
+}
