@@ -3,7 +3,6 @@
 
 #include "fsm.h"
 #include "bq_comm.h"
-#include "MiniCan.h"
 
 
 #ifndef LED_BUILTIN
@@ -15,9 +14,6 @@ unsigned long prevMillis = 0;
 ESP32_CAN Can;
 static CAN_message_t CAN_outMsg1;
 static CAN_message_t CAN_outMsg2;
-
-const uint8_t CS_PIN = 11;
-MiniCAN can2;
 
 // ------------- BMS Types -------------
 CurrentState    curState;
@@ -67,11 +63,6 @@ void setup() {
     addrOk = bq_auto_address();
     Serial.printf("bq_auto_address(): %s\n", addrOk ? "PASS" : "FAIL");
 
-    SPI.begin();
-    if (!can2.begin(CS_PIN, CAN_500K)) {
-        Serial.println("CAN init failed - check wiring/power");
-    }
-
     Serial.println("CAN ready");
 }
 
@@ -81,9 +72,4 @@ void loop() {
         prevMillis = now;
         digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
     }
-
-    uint8_t data[8] = {1, 2, 3, 4, 5, 6, 7, 8};
-    bool ok = can2.send(0x123, data, 8);          // standard 11-bit ID
-    Serial.println(ok ? "sent" : "tx busy (no ACK on bus?)");
-    delay(500);
 }
