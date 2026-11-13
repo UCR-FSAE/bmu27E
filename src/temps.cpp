@@ -93,6 +93,14 @@ static float getTemp(uint16_t deviceID){
 	return temp;
 }
 
+/*---=== POTENTIAL STACK READ STEPS
+stack read is a real thing that is supposed both in software design ref. and 616 datasheet.
+use two stack reads. one for GPIO and one for TSREF
+loop through array to calculate all temps
+
+current code works around single read.
+*/
+
 //---=== READ TEMPS
 // wrapper that uses getTemp() to read from all 12 cells
 // returns highest temp of all cells? or returns all cells?
