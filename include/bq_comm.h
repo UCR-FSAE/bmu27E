@@ -419,4 +419,4 @@ typedef struct {
 
 FaultSummary decodeFaultSummary(uint8_t summary); //decodes the 8 bits summary into a boolean struct
 BmsStatus_t readFaultSummary(BqResponse out); //reads summaries from all 10 BQ
-void handleFaultSummary(FaultSummary summary, FaultRegisters registers); //in case a fault is true reads through the corresponding registers  
+BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers); //in case a fault is true reads through the corresponding registers  
