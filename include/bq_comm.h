@@ -385,6 +385,7 @@ typedef struct
     bool power; //3
 } FaultSummary;
 
+//check which faults the bridge has 
 //index 0 is not used since it belongs to the bridge
 typedef struct {
     uint8_t summary[13]; //fault summary
