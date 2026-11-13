@@ -375,16 +375,48 @@ typedef enum
 
 typedef struct
 {
-    bool protection;
-    bool comparatorADC;
-    bool otp;
-    bool communication;
-    bool overTempUnderTemp;
-    bool overVoltageUnderVoltage;
-    bool system;
-    bool power;
+    bool protection; //2
+    bool comparatorADC; //10
+    bool otp; //1
+    bool communication; //3
+    bool overTempUnderTemp; //2
+    bool overVoltageUnderVoltage; //4
+    bool system; //1
+    bool power; //3
 } FaultSummary;
 
-FaultSummary decodeSummary(uint8_t summary); //decodes the 8 bits summary into a boolean struct
-uint8_t readSummary();
+//index 0 is not used since it belongs to the bridge
+typedef struct {
+    uint8_t summary[13]; //fault summary
+    uint8_t comm1[13];
+    uint8_t comm2[13];
+    uint8_t comm3[13];
+    uint8_t otp[13];
+    uint8_t sys[13];
+    uint8_t prot1[13];
+    uint8_t prot2[13];
+    uint8_t ov1[13];
+    uint8_t ov2[13];
+    uint8_t uv1[13];
+    uint8_t uv2[13];
+    uint8_t ot[13];
+    uint8_t ut[13];
+    uint8_t comp_gpio[13];
+    uint8_t comp_vccb1[13];
+    uint8_t comp_vccb2[13];
+    uint8_t comp_vcow1[13];
+    uint8_t comp_vcow2[13];
+    uint8_t comp_cbow1[13];
+    uint8_t comp_cbow2[13];
+    uint8_t comp_cbfet1[13];
+    uint8_t comp_cbfet2[13];
+    uint8_t comp_misc[13];
+    uint8_t pwr1[13];
+    uint8_t pwr2[13];
+    uint8_t pwr3[13];
+}FaultRegisters; 
 
+
+FaultSummary decodeFaultSummary(uint8_t summary); //decodes the 8 bits summary into a boolean struct
+BmsStatus_t readFaultSummary(BqResponse out); //reads summaries from all 10 BQ
+void handleFaultSummary(FaultSummary summary, FaultRegisters registers); //in case a fault is true reads through the corresponding registers  
