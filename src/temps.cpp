@@ -106,12 +106,13 @@ current code works around single read.
 // returns highest temp of all cells? or returns all cells?
 // only returning highest for now. probably will change later.
 float readTemps(){
-	//float temps[NUM_STACK_DEVICES];
+	// float temps[NUM_STACK_DEVICES];
 	float maxTemp = -INFINITY;
 	float curTemp = 0;
 	uint8_t nValid = 0;
 
-	//deviceID based on autoaddress. 1-12 is for each BQ79616.
+	// deviceID based on autoaddress. 1-12 is for each BQ79616.
+	// works b/c only devices on stack are the bq's and master
 	for(uint8_t i = 0; i < NUM_STACK_DEVICES; i++){
 		curTemp = getTemp(i+1);
 		// temps[i] = curTemp;
