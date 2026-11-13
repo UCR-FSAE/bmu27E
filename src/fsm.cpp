@@ -25,12 +25,8 @@ void run_fsm(CurrentState& curSt, const Inputs& in, Outputs& out) {
             break;
         case INIT:
             break;
-<<<<<<< HEAD
         case RUNNING:
             if (commLost()) { next_state(curSt, FAULT); }
-=======
-        case RUNNING: //polling here
->>>>>>> 95c45ea (revised scopes)
             break;
         case CHARGING:
             break;
