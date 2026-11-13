@@ -1,18 +1,15 @@
-#include "temps.h"
 #include <Arduino.h>
 #include <stdint.h>
 #include <math.h>
+
+#include "temps.h"
+#include "bq_comm.h"
 
 // ---=== BASIC PLAN
 // get resistance using formula: res = R_CONST * gpio_uv / (tsref_uv - gpio_uv);
 // old thermistor code uses steinhart formula w/ the 3 coefficients A, B, C.
 // find out what current thermistor values are from altium
 // evan needs to meet w/ other teams during scope meeting to figure this out but assume old stuff still being used for now
-
-read_temps(){
-	request from device 1, 2, etc.
-}
-
 
 // ---=== STEINHART NUMBERS
 // STEIN_<A-C> = based on thermistor material/manufacturing process. likely different for the current thermistor?
@@ -63,32 +60,28 @@ better than polling (wasteful). mailbox could get full
 // helper func for eventual readTemps()
 // either single read that's looped 12 times in the wrapper or a stack read for all
 // need to reformat to use evan's interrupt-driven non-blocking struct. later.
-float getTemp(uint16_t deviceID, uint8_t GPIOHIAddr){
-	// need buffer b/c spi read gives one byte at a time
-	uint8_t buffer[2];
+static float getTemp(uint16_t deviceID){
+	//data from bq
+	BqResponse response;
 
 	// raw values from bq pins
 	uint16_t gpio_raw = 0;
 	uint16_t tsref_raw = 0;
 
  	// read from gpio and tsref registers
-	// SpitReadReg from example code is placeholder for actual register read func.
-	// but alter later to deal w the OnRead struct thing
-	// actually hard code reading all 12 in the same function
+	// values we want are always gonna be in the same registers.
+	if(bqRead(SINGLE_READ_VAL, deviceID, 0x058E, 2, 1, &response, 100) != BMS_OK || !response.valid[deviceID]){return NAN;}
+	gpio_raw = (uint16_t)(response.data[deviceID][0] << 8) | response.data[deviceID][1];
 
-	
-	SpiReadReg(deviceID, 0x058E, buf, 2, 100, 0x00);	// GPIO hi/lo. does single device read.
-    gpio_raw = (buffer[0] << 8) | buffer[1];
-
-    SpiReadReg(deviceID, 0x058C, buf, 2, 100, 0x00); 	// TSREF hi/lo. but stack read is better?
-    tsref_raw = (buffer[0] << 8) | buffer[1];
+	if(bqRead(SINGLE_READ_VAL, deviceID, 0x058C, 2, 1, &response, 100) != BMS_OK || !response.valid[deviceID]){return NAN;}
+	tsref_raw = (uint16_t)(response.data[deviceID][0] << 8) | response.data[deviceID][1];
 
 	// gpio and tsref converted to microvolts
 	// 2's compliment multiplied by scaling value from bq79616 datasheet
     float gpio_uV  = (float)(int16_t)gpio_raw * 152.59f;	// 152.59 is for GPIO*_HI/LO
     float tsref_uV = (float)(int16_t)tsref_raw * 169.54f; 	// 169.54 is for TSREF_HI/LO
 
-	if (gpio_uV <= 0.0f || gpio_uV >= tsref_uV) return 0.0f;// old thermistor code considered gpio_V <= 0 || >= tsref_V as errors. returned 0.
+	if (gpio_uV <= 0.0f || gpio_uV >= tsref_uV) return NAN;// old thermistor code considered gpio_V <= 0 || >= tsref_V as errors.
 	
 	float res = R_CONST * gpio_uV / (tsref_uV - gpio_uV); 	// calculate resistance
 
@@ -98,4 +91,32 @@ float getTemp(uint16_t deviceID, uint8_t GPIOHIAddr){
 	float temp = 1.0f / invTemp - 273.15f; 												// - 273 to get temps in C. Steinhart gives Kelvin.
 
 	return temp;
+}
+
+//---=== READ TEMPS
+// wrapper that uses getTemp() to read from all 12 cells
+// returns highest temp of all cells? or returns all cells?
+// only returning highest for now. probably will change later.
+float readTemps(){
+	//float temps[NUM_STACK_DEVICES];
+	float maxTemp = -INFINITY;
+	float curTemp = 0;
+	uint8_t nValid = 0;
+
+	//deviceID based on autoaddress. 1-12 is for each BQ79616.
+	for(uint8_t i = 0; i < NUM_STACK_DEVICES; i++){
+		curTemp = getTemp(i+1);
+		// temps[i] = curTemp;
+
+		//not sure how to approach this yet.
+		if(!isnan(curTemp)){
+			nValid++;
+		}
+
+		if(curTemp > maxTemp){maxTemp = curTemp;}
+	}
+	
+
+	if(nValid <= 0){maxTemp = NAN;}
+	return maxTemp;
 }
