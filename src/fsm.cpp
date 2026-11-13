@@ -1,4 +1,5 @@
 #include "fsm.h"
+#include "bq_comm.h"
 
 /*
     BOOT_FAULT,     // Just powered on, init variables
@@ -25,6 +26,7 @@ void run_fsm(CurrentState& curSt, const Inputs& in, Outputs& out) {
         case INIT:
             break;
         case RUNNING:
+            if (commLost()) { next_state(curSt, FAULT); }
             break;
         case CHARGING:
             break;
