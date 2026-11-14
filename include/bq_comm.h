@@ -359,6 +359,7 @@ void rebalanceVoltages();
 void markOk(Meas m);
 void resetAll();
 bool commLost();
+// ---------------------------------------------------------------------------ù
 // Faults
 // ---------------------------------------------------------------------------
 typedef enum
@@ -384,6 +385,14 @@ typedef struct
     bool system; //1
     bool power; //3
 } FaultSummary;
+
+typedef struct
+{
+    bool communication;
+    bool registers;
+    bool system;
+    bool power;
+} BridgeFaultSummary;
 
 //check which faults the bridge has 
 //index 0 is not used since it belongs to the bridge
@@ -416,6 +425,15 @@ typedef struct {
     uint8_t pwr2[13];
     uint8_t pwr3[13];
 }FaultRegisters; 
+
+typedef struct 
+{
+    uint8_t reg;
+    uint8_t sys;
+    uint8_t pwr;
+    uint8_t comm1;
+    uint8_t comm2;
+}BridgeFaultRegisters;
 
 
 FaultSummary decodeFaultSummary(uint8_t summary); //decodes the 8 bits summary into a boolean struct
