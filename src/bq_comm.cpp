@@ -416,7 +416,7 @@ static bool readExact(uint8_t *buf, size_t n, uint32_t deadline_ms)
 // Collect up to `expected_frames` replies of `nbytes` data bytes each.
 // Reply frame: [len-1][dev][reg_H][reg_L][data x len][CRC_L][CRC_H]
 // Returns how many valid (CRC-checked) replies arrived.
-BmsStatus_t bqReadresp(uint8_t nbytes, int expected_frames, Bqresp *out, uint32_t timeout_ms)
+BmsStatus_t bqReadResponse(uint8_t nbytes, int expected_frames, BqResponse *out, uint32_t timeout_ms)
 {
     for (int i = 0; i < BQ_MAX_DEVICES; i++)
         out->valid[i] = false;
@@ -705,7 +705,6 @@ BridgeFaultSummary decodeBridgeFaultSummary(uint8_t summary)
 }
 
 // TODO
-// how does the bridge send faults?
 
 //to check: for a stack read the bridge's data is not included
 //to read from the bridge take a single data read at address 0 (second param)
@@ -717,293 +716,245 @@ BridgeFaultSummary decodeBridgeFaultSummary(uint8_t summary)
     //                   (int)st, resp.num_valid, NUM_STACK_DEVICES, resp.crc_errors);
     // }
 
-BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
+
+BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 {
-    // substitute resp with global resp
-    BmsStatus_t status;
-    if (summary.communication)
+    BmsStatus_t status = BMS_OK;
+
+    if (summary == nullptr || registers == nullptr){} //Handle null pointer 
+        
+    if (summary->communication)
     {
         status = bqRead(STACK_READ_VAL, 0, 0x0530, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT);
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
         for (int i = 1; i <= 12; i++)
-        {
             if (resp.valid[i])
-                registers.comm1[i] = resp.data[i][0];
-            // else do something
-        }
+                registers->comm1[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x0531, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT);   
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
         for (int i = 1; i <= 12; i++)
-            {
-                if (resp.valid[i])
-                    registers.comm2[i] = resp.data[i][0];
-                // else do something
-            }
+            if (resp.valid[i])
+                registers->comm2[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x0532, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT);  
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
         for (int i = 1; i <= 12; i++)
-            {
-                if (resp.valid[i])
-                    registers.comm3[i] = resp.data[i][0];
-                // else do something
-            }
+            if (resp.valid[i])
+                registers->comm3[i] = resp.data[i][0];
     }
 
-    if (summary.otp)
+    if (summary->otp)
     {
         status = bqRead(STACK_READ_VAL, 0, 0x0535, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT); 
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
         for (int i = 1; i <= 12; i++)
-            {
-                if (resp.valid[i])
-                    registers.otp[i] = resp.data[i][0];
-                // else do something
-            }
+            if (resp.valid[i])
+                registers->otp[i] = resp.data[i][0];
     }
 
-    if (summary.system)
+    if (summary->system)
     {
         status = bqRead(STACK_READ_VAL, 0, 0x0536, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT); 
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
         for (int i = 1; i <= 12; i++)
-            {
-                if (resp.valid[i])
-                    registers.sys[i] = resp.data[i][0];
-                // else do something
-            }
+            if (resp.valid[i])
+                registers->sys[i] = resp.data[i][0];
     }
 
-    if (summary.protection)
+    if (summary->protection)
     {
         status = bqRead(STACK_READ_VAL, 0, 0x053A, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT);
-            for (int i = 1; i <= 12; i++)
-            {
-                if (resp.valid[i])
-                    registers.prot1[i] = resp.data[i][0];
-                // else do something
-            }
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
+        for (int i = 1; i <= 12; i++)
+            if (resp.valid[i])
+                registers->prot1[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x053B, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT);
-            for (int i = 1; i <= 12; i++)
-            {
-                if (resp.valid[i])
-                    registers.prot2[i] = resp.data[i][0];
-                // else do something
-            }
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
+        for (int i = 1; i <= 12; i++)
+            if (resp.valid[i])
+                registers->prot2[i] = resp.data[i][0];
     }
 
-    if (summary.overVoltageUnderVoltage)
+    if (summary->overVoltageUnderVoltage)
     {
         status = bqRead(STACK_READ_VAL, 0, 0x053C, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT);
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
         for (int i = 1; i <= 12; i++)
-        {
             if (resp.valid[i])
-                registers.ov1[i] = resp.data[i][0];
-            // else do something
-        }
+                registers->ov1[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x053D, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT);
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
         for (int i = 1; i <= 12; i++)
-        {
             if (resp.valid[i])
-                registers.ov2[i] = resp.data[i][0];
-            // else do something
-        }
+                registers->ov2[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x053E, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT);
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
         for (int i = 1; i <= 12; i++)
-        {
             if (resp.valid[i])
-                registers.uv1[i] = resp.data[i][0];
-            // else do something
-        }
+                registers->uv1[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x053F, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT);
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
         for (int i = 1; i <= 12; i++)
-        {
             if (resp.valid[i])
-                registers.uv2[i] = resp.data[i][0];
-            // else do something
-        }
+                registers->uv2[i] = resp.data[i][0];
     }
 
-    if (summary.overTempUnderTemp)
+    if (summary->overTempUnderTemp)
     {
         status = bqRead(STACK_READ_VAL, 0, 0x0540, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT);
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
         for (int i = 1; i <= 12; i++)
-        {
             if (resp.valid[i])
-                registers.ot[i] = resp.data[i][0];
-            // else do something
-        }
+                registers->ot[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x0541, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT);
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
         for (int i = 1; i <= 12; i++)
-        {
             if (resp.valid[i])
-                registers.ut[i] = resp.data[i][0];
-            // else do something
-        }
+                registers->ut[i] = resp.data[i][0];
     }
 
-    if (summary.comparatorADC)
+    if (summary->comparatorADC)
     {
         status = bqRead(STACK_READ_VAL, 0, 0x0543, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT);
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
         for (int i = 1; i <= 12; i++)
-        {
             if (resp.valid[i])
-                registers.comp_gpio[i] = resp.data[i][0];
-            // else do something
-        }
+                registers->comp_gpio[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x0545, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT);
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
         for (int i = 1; i <= 12; i++)
-        {
             if (resp.valid[i])
-                registers.comp_vccb1[i] = resp.data[i][0];
-            // else do something
-        }
+                registers->comp_vccb1[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x0546, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT);
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
         for (int i = 1; i <= 12; i++)
-        {
             if (resp.valid[i])
-                registers.comp_vccb2[i] = resp.data[i][0];
-            // else do something
-        }
+                registers->comp_vccb2[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x0548, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT);
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
         for (int i = 1; i <= 12; i++)
-        {
             if (resp.valid[i])
-                registers.comp_vcow1[i] = resp.data[i][0];
-            // else do something
-        }
+                registers->comp_vcow1[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x0549, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT);
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
         for (int i = 1; i <= 12; i++)
-        {
             if (resp.valid[i])
-                registers.comp_vcow2[i] = resp.data[i][0];
-            // else do something
-        }
+                registers->comp_vcow2[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x054B, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT);
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
         for (int i = 1; i <= 12; i++)
-        {
             if (resp.valid[i])
-                registers.comp_cbow1[i] = resp.data[i][0];
-            // else do something
-        }
+                registers->comp_cbow1[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x054C, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT);
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
         for (int i = 1; i <= 12; i++)
-        {
             if (resp.valid[i])
-                registers.comp_cbow2[i] = resp.data[i][0];
-            // else do something
-        }
+                registers->comp_cbow2[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x054E, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT);
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
         for (int i = 1; i <= 12; i++)
-        {
             if (resp.valid[i])
-                registers.comp_cbfet1[i] = resp.data[i][0];
-            // else do something
-        }
+                registers->comp_cbfet1[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x054F, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT);
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
         for (int i = 1; i <= 12; i++)
-        {
             if (resp.valid[i])
-                registers.comp_cbfet2[i] = resp.data[i][0];
-            // else do something
-        }
+                registers->comp_cbfet2[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x0550, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT);
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
         for (int i = 1; i <= 12; i++)
-        {
             if (resp.valid[i])
-                registers.comp_misc[i] = resp.data[i][0];
-            // else do something
-        }
+                registers->comp_misc[i] = resp.data[i][0];
     }
 
-    if (summary.power)
+    if (summary->power)
     {
         status = bqRead(STACK_READ_VAL, 0, 0x0552, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT);
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
         for (int i = 1; i <= 12; i++)
-        {
             if (resp.valid[i])
-                registers.pwr1[i] = resp.data[i][0];
-            // else do something
-        }
+                registers->pwr1[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x0553, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT);
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
         for (int i = 1; i <= 12; i++)
-        {
             if (resp.valid[i])
-                registers.pwr2[i] = resp.data[i][0];
-            // else do something
-        }
+                registers->pwr2[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x0554, 1, 12, &resp, 20);
-        if (status != BMS_OK){} // do smth
-            markOk(READ_FAULT);
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
         for (int i = 1; i <= 12; i++)
-        {
             if (resp.valid[i])
-                registers.pwr3[i] = resp.data[i][0];
-            // else do something
-        }
+                registers->pwr3[i] = resp.data[i][0];
     }
 
     return status;
 }
+
