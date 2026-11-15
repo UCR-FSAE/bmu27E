@@ -180,5 +180,5 @@ FaultSummary decodeFaultSummary(uint8_t summary); //decodes the 8 bits summary i
 BridgeFaultSummary decodeBridgeFaultSummary(uint8_t summary);
 BmsStatus_t readFaultSummary(); //reads summaries from all 12 BQ
 BmsStatus_t readBridgeFaultSummary(); //reads bridge's summary
-BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters *registers); //in case a fault is true reads through the corresponding registers  
-BmsStatus_t handleBridgeFaultSummary(BridgeFaultSummary summary, BridgeFaultRegisters *registers); //in case a fault is true reads through the corresponding registers  
+BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers); //in case a fault is true reads through the corresponding registers  
+BmsStatus_t handleBridgeFaultSummary(BridgeFaultSummary *summary, BridgeFaultRegisters *registers);   

@@ -958,3 +958,60 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
     return status;
 }
 
+
+BmsStatus_t handleBridgeFaultSummary(BridgeFaultSummary *summary, BridgeFaultRegisters *registers)
+{
+    BmsStatus_t status = BMS_OK;
+
+    if (summary == nullptr || registers == nullptr){} //Handle null pointer 
+        
+    if (summary->registers)
+    {
+        status = bqRead(SINGLE_READ_VAL, 0, 0x2101, 1, 1, &resp, 20); 
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
+        if (resp.valid[0]) //check if valid[0] is correct 
+            registers->reg = resp.data[0][0];
+    }
+
+    if (summary->system)
+    {
+        status = bqRead(SINGLE_READ_VAL, 0, 0x2102, 1, 1, &resp, 20); 
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
+        if (resp.valid[0]) //check if valid[0] is correct 
+            registers->sys = resp.data[0][0];
+    }
+
+     if (summary->power)
+    {
+        status = bqRead(SINGLE_READ_VAL, 0, 0x2103, 1, 1, &resp, 20); 
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
+        if (resp.valid[0]) //check if valid[0] is correct 
+            registers->pwr = resp.data[0][0];
+    }
+
+      if (summary->communication)
+    {
+        status = bqRead(SINGLE_READ_VAL, 0, 0x2104, 1, 1, &resp, 20); 
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
+        if (resp.valid[0]) //check if valid[0] is correct 
+            registers->comm1 = resp.data[0][0];
+
+        status = bqRead(SINGLE_READ_VAL, 0, 0x2105, 1, 1, &resp, 20); 
+        if (status != BMS_OK) {} // Handle error
+        markOk(READ_FAULT);
+
+        if (resp.valid[0]) //check if valid[0] is correct 
+            registers->comm2 = resp.data[0][0];
+    }
+
+    return status;
+
+}
