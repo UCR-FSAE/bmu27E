@@ -589,7 +589,7 @@ void markOk(Meas m) { last_resp[m] = millis(); }
 // call at end of INIT
 void resetAll()
 {
-    uint32_t now = millis();
+    uint32_t now = millis(); //TODO why is now not used 
     for (int i = 0; i < READ_COUNT; i++)
     {
         last_resp[i] = millis();
@@ -632,7 +632,7 @@ void readFaultFlags()
     // double check faults that get sent
 }
 
-BmsStatus_t readFaultSummary()
+BmsStatus_t readFaultSummary(FaultSummary summary[])
 {
     BmsStatus_t status = bqRead(STACK_READ_VAL, // reading from the stack to get all 12 resps at once
                                 0,
@@ -651,30 +651,29 @@ BmsStatus_t readFaultSummary()
             {
                 // do smth
             }
+            summary[i] = decodeFaultSummary(resp.data[i][0]);
+
         }
     return status;
 }
 
-BmsStatus_t readBridgeFaultSummary()
+BmsStatus_t readBridgeFaultSummary(BridgeFaultSummary *summary)
 {
-    BmsStatus_t status = bqRead(SINGLE_READ_VAL, // reading only bridge's registers 
-                                0, //index of the bridge
-                                BRDG_REG_FAULT_SMRY,
-                                1,
-                                1,
-                                &resp,
-                                20);
+    BmsStatus_t status = bqRead(
+        SINGLE_READ_VAL, // reading only bridge's registers 
+        0, //index of the bridge
+        BRDG_REG_FAULT_SMRY,
+        1,
+        1,
+        &resp,
+        20);
 
     if (status != BMS_OK) // do smth
 
-        // check if each respose is valid
-        for (int i = 1; i <= 12; ++i)
-        {
-            if (!resp.valid[i])
-            {
-                // do smth
-            }
-        }
+        // check if respose is valid
+    if (!resp.valid[0]){}
+    *summary = decodeBridgeFaultSummary(resp.data[0][0]);
+    
     return status;
 }
 

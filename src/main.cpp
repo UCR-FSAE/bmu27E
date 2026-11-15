@@ -20,6 +20,12 @@ CurrentState    curState;
 Inputs          in;
 Outputs         out;
 
+// ------------- Fault Types ------------
+FaultSummary summary[12];
+BridgeFaultSummary bridgeSummary;
+FaultRegisters registers[12];
+BridgeFaultRegisters bridgeRegisters;
+
 // Registers used for verification
 #define BRIDGE_PARTID_REG   0x2120   // BQ79600 PARTID (silicon rev, 0x01 = A1 on your board)
 #define BQ616_DIR0_ADDR_REG 0x0306   // device address

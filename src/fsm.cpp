@@ -26,8 +26,17 @@ void run_fsm(CurrentState& curSt, const Inputs& in, Outputs& out) {
         case INIT:
             break;
         case RUNNING:
-            if (commLost()) { next_state(curSt, FAULT); }
-            break;
+            if (commLost()){ 
+             next_state(curSt, FAULT);
+             break;
+            }
+            if (++curSt.state_ticks >= 100) {  // TODO check fsm ticks -- 100 × 10 ms = 1 second
+                curSt.state_ticks = 0;
+                // Poll the BQ here
+                
+        
+            }
+            
         case CHARGING:
             break;
         case FAULT:
