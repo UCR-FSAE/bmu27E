@@ -381,7 +381,7 @@ bool bqWrite1(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, uint8_t valu
 
 // send read frame and read from uart
 BmsStatus_t bqRead(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, uint8_t nbytes,
-                   int expected_frames, Bqresp *out, uint32_t timeout_ms)
+                   int expected_frames, BqResponse *out, uint32_t timeout_ms)
 {
     BmsStatus_t st = BMS_ERR_TIMEOUT;
     for (uint8_t attempt = 0; attempt <= BQ_MAX_RETRIES; attempt++)
@@ -392,7 +392,7 @@ BmsStatus_t bqRead(uint8_t msgType, uint8_t dev_addr, uint16_t reg_addr, uint8_t
         bqFlushRx(); // also discards leftovers from a failed attempt
         uint8_t len = build_read_frame(buf, msgType, dev_addr, reg_addr, nbytes - 1);
         UART_SERIAL.write(buf, len);
-        st = bqReadresp(nbytes, expected_frames, out, timeout_ms);
+        st = bqReadResponse(nbytes, expected_frames, out, timeout_ms);
         if (st != BMS_ERR_CRC)
             return st; // OK or a non-retryable error
     }
@@ -632,6 +632,53 @@ void readFaultFlags()
     // double check faults that get sent
 }
 
+BmsStatus_t readFaultSummary()
+{
+    BmsStatus_t status = bqRead(STACK_READ_VAL, // reading from the stack to get all 12 resps at once
+                                0,
+                                REG_FAULT_SMRY,
+                                1,
+                                12,
+                                &resp,
+                                20);
+
+    if (status != BMS_OK) // do smth
+
+        // check if each respose is valid
+        for (int i = 1; i <= 12; ++i)
+        {
+            if (!resp.valid[i])
+            {
+                // do smth
+            }
+        }
+    return status;
+}
+
+BmsStatus_t readBridgeFaultSummary()
+{
+    BmsStatus_t status = bqRead(SINGLE_READ_VAL, // reading only bridge's registers 
+                                0, //index of the bridge
+                                BRDG_REG_FAULT_SMRY,
+                                1,
+                                1,
+                                &resp,
+                                20);
+
+    if (status != BMS_OK) // do smth
+
+        // check if each respose is valid
+        for (int i = 1; i <= 12; ++i)
+        {
+            if (!resp.valid[i])
+            {
+                // do smth
+            }
+        }
+    return status;
+}
+
+
 FaultSummary decodeFaultSummary(uint8_t summary)
 {
     FaultSummary f{};
@@ -646,27 +693,15 @@ FaultSummary decodeFaultSummary(uint8_t summary)
     return f;
 }
 
-BmsStatus_t readFaultSummary(Bqresp out)
+BridgeFaultSummary decodeBridgeFaultSummary(uint8_t summary)
 {
-    BmsStatus_t status = bqRead(STACK_READ_VAL, // reading from the stack to get all 12 resps at once
-                                0,
-                                REG_FAULT_SMRY,
-                                1,
-                                12,
-                                &out,
-                                20);
+    BridgeFaultSummary f{};
+    f.communication = (summary & (1u << 3)) != 0;
+    f.registers = (summary & (1u << 2)) != 0;
+    f.system = (summary & (1u << 1)) != 0;
+    f.power = (summary & 1u) != 0;
 
-    if (status != BMS_OK) // do smth
-
-        // check if each respose is valid
-        for (int i = 1; i <= 12; ++i)
-        {
-            if (!out.valid[i])
-            {
-                // do smth
-            }
-        }
-    return status;
+    return f;
 }
 
 // TODO
@@ -690,7 +725,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
     {
         status = bqRead(STACK_READ_VAL, 0, 0x0530, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk();
+            markOk(READ_FAULT);
         for (int i = 1; i <= 12; i++)
         {
             if (resp.valid[i])
@@ -700,7 +735,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
 
         status = bqRead(STACK_READ_VAL, 0, 0x0531, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk();   
+            markOk(READ_FAULT);   
         for (int i = 1; i <= 12; i++)
             {
                 if (resp.valid[i])
@@ -710,7 +745,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
 
         status = bqRead(STACK_READ_VAL, 0, 0x0532, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk();  
+            markOk(READ_FAULT);  
         for (int i = 1; i <= 12; i++)
             {
                 if (resp.valid[i])
@@ -723,7 +758,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
     {
         status = bqRead(STACK_READ_VAL, 0, 0x0535, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk(); 
+            markOk(READ_FAULT); 
         for (int i = 1; i <= 12; i++)
             {
                 if (resp.valid[i])
@@ -736,7 +771,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
     {
         status = bqRead(STACK_READ_VAL, 0, 0x0536, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk(); 
+            markOk(READ_FAULT); 
         for (int i = 1; i <= 12; i++)
             {
                 if (resp.valid[i])
@@ -749,7 +784,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
     {
         status = bqRead(STACK_READ_VAL, 0, 0x053A, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk();
+            markOk(READ_FAULT);
             for (int i = 1; i <= 12; i++)
             {
                 if (resp.valid[i])
@@ -759,7 +794,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
 
         status = bqRead(STACK_READ_VAL, 0, 0x053B, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk();
+            markOk(READ_FAULT);
             for (int i = 1; i <= 12; i++)
             {
                 if (resp.valid[i])
@@ -772,7 +807,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
     {
         status = bqRead(STACK_READ_VAL, 0, 0x053C, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk();
+            markOk(READ_FAULT);
         for (int i = 1; i <= 12; i++)
         {
             if (resp.valid[i])
@@ -782,7 +817,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
 
         status = bqRead(STACK_READ_VAL, 0, 0x053D, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk();
+            markOk(READ_FAULT);
         for (int i = 1; i <= 12; i++)
         {
             if (resp.valid[i])
@@ -792,7 +827,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
 
         status = bqRead(STACK_READ_VAL, 0, 0x053E, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk();
+            markOk(READ_FAULT);
         for (int i = 1; i <= 12; i++)
         {
             if (resp.valid[i])
@@ -802,7 +837,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
 
         status = bqRead(STACK_READ_VAL, 0, 0x053F, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk();
+            markOk(READ_FAULT);
         for (int i = 1; i <= 12; i++)
         {
             if (resp.valid[i])
@@ -815,7 +850,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
     {
         status = bqRead(STACK_READ_VAL, 0, 0x0540, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk();
+            markOk(READ_FAULT);
         for (int i = 1; i <= 12; i++)
         {
             if (resp.valid[i])
@@ -825,7 +860,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
 
         status = bqRead(STACK_READ_VAL, 0, 0x0541, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk();
+            markOk(READ_FAULT);
         for (int i = 1; i <= 12; i++)
         {
             if (resp.valid[i])
@@ -838,7 +873,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
     {
         status = bqRead(STACK_READ_VAL, 0, 0x0543, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk();
+            markOk(READ_FAULT);
         for (int i = 1; i <= 12; i++)
         {
             if (resp.valid[i])
@@ -848,7 +883,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
 
         status = bqRead(STACK_READ_VAL, 0, 0x0545, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk();
+            markOk(READ_FAULT);
         for (int i = 1; i <= 12; i++)
         {
             if (resp.valid[i])
@@ -858,7 +893,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
 
         status = bqRead(STACK_READ_VAL, 0, 0x0546, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk();
+            markOk(READ_FAULT);
         for (int i = 1; i <= 12; i++)
         {
             if (resp.valid[i])
@@ -868,7 +903,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
 
         status = bqRead(STACK_READ_VAL, 0, 0x0548, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk();
+            markOk(READ_FAULT);
         for (int i = 1; i <= 12; i++)
         {
             if (resp.valid[i])
@@ -878,7 +913,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
 
         status = bqRead(STACK_READ_VAL, 0, 0x0549, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk();
+            markOk(READ_FAULT);
         for (int i = 1; i <= 12; i++)
         {
             if (resp.valid[i])
@@ -888,7 +923,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
 
         status = bqRead(STACK_READ_VAL, 0, 0x054B, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk();
+            markOk(READ_FAULT);
         for (int i = 1; i <= 12; i++)
         {
             if (resp.valid[i])
@@ -898,7 +933,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
 
         status = bqRead(STACK_READ_VAL, 0, 0x054C, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk();
+            markOk(READ_FAULT);
         for (int i = 1; i <= 12; i++)
         {
             if (resp.valid[i])
@@ -908,7 +943,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
 
         status = bqRead(STACK_READ_VAL, 0, 0x054E, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk();
+            markOk(READ_FAULT);
         for (int i = 1; i <= 12; i++)
         {
             if (resp.valid[i])
@@ -918,7 +953,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
 
         status = bqRead(STACK_READ_VAL, 0, 0x054F, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk();
+            markOk(READ_FAULT);
         for (int i = 1; i <= 12; i++)
         {
             if (resp.valid[i])
@@ -928,7 +963,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
 
         status = bqRead(STACK_READ_VAL, 0, 0x0550, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk();
+            markOk(READ_FAULT);
         for (int i = 1; i <= 12; i++)
         {
             if (resp.valid[i])
@@ -941,7 +976,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
     {
         status = bqRead(STACK_READ_VAL, 0, 0x0552, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk();
+            markOk(READ_FAULT);
         for (int i = 1; i <= 12; i++)
         {
             if (resp.valid[i])
@@ -951,7 +986,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
 
         status = bqRead(STACK_READ_VAL, 0, 0x0553, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk();
+            markOk(READ_FAULT);
         for (int i = 1; i <= 12; i++)
         {
             if (resp.valid[i])
@@ -961,7 +996,7 @@ BmsStatus_t handleFaultSummary(FaultSummary summary, FaultRegisters registers)
 
         status = bqRead(STACK_READ_VAL, 0, 0x0554, 1, 12, &resp, 20);
         if (status != BMS_OK){} // do smth
-            markOk();
+            markOk(READ_FAULT);
         for (int i = 1; i <= 12; i++)
         {
             if (resp.valid[i])

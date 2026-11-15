@@ -86,3 +86,4 @@
 
 // ---------------- Faults ---------------- 
 #define REG_FAULT_SMRY         0x052D
+#define BRDG_REG_FAULT_SMRY    0x2100
