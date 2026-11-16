@@ -17,7 +17,10 @@ void next_state(CurrentState& curSt, State s) {
     curSt.state_ticks = 0;
 }
 
-void run_fsm(CurrentState& curSt, const Inputs& in, Outputs& out) {
+void run_fsm(CurrentState& curSt, const Inputs& in, Outputs& out, FaultSummary summary[12], //TODO should I use this approach to pass variables? 
+BridgeFaultSummary bridgeSummary,
+FaultRegisters registers[12],
+BridgeFaultRegisters bridgeRegisters) {
     out = {};
 
     switch (curSt.state) {
@@ -32,9 +35,15 @@ void run_fsm(CurrentState& curSt, const Inputs& in, Outputs& out) {
             }
             if (++curSt.state_ticks >= 100) {  // TODO check fsm ticks -- 100 × 10 ms = 1 second
                 curSt.state_ticks = 0;
-                // Poll the BQ here
+                // Poll the BQ 
+                BmsStatus_t st = readFaultSummary(summary); //TODO how do I manage status?
+                st = readBridgeFaultSummary(&bridgeSummary);
                 
-        
+                //check if any of the summaries reports a fault
+               if(checkAnyFault(summary,&bridgeSummary)){
+                 next_state(curSt, FAULT);
+                 break;
+               }
             }
             
         case CHARGING:
