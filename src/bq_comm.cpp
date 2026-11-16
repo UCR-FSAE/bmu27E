@@ -627,10 +627,6 @@ void readTemps()
     // TODO: read like a book.
 }
 
-void readFaultFlags()
-{
-    // double check faults that get sent
-}
 
 BmsStatus_t readFaultSummary(FaultSummary summary[])
 {
@@ -649,9 +645,10 @@ BmsStatus_t readFaultSummary(FaultSummary summary[])
         {
             if (!resp.valid[i])
             {
+                continue;
                 // do smth
             }
-            summary[i] = decodeFaultSummary(resp.data[i][0]);
+            summary[i - 1] = decodeFaultSummary(resp.data[i][0]);
 
         }
     return status;

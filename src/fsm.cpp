@@ -36,8 +36,12 @@ BridgeFaultRegisters bridgeRegisters) {
             if (++curSt.state_ticks >= 100) {  // TODO check fsm ticks -- 100 × 10 ms = 1 second
                 curSt.state_ticks = 0;
                 // Poll the BQ 
-                BmsStatus_t st = readFaultSummary(summary); //TODO how do I manage status?
-                st = readBridgeFaultSummary(&bridgeSummary);
+                BmsStatus_t summaryStatus = readFaultSummary(summary);
+                BmsStatus_t bridgeStatus = readBridgeFaultSummary(&bridgeSummary);
+                    if (summaryStatus != BMS_OK || bridgeStatus != BMS_OK) {
+                        next_state(curSt, FAULT);  // Or handle communication/read errors separately
+                        break;
+                    }
                 
                 //check if any of the summaries reports a fault
                if(checkAnyFault(summary,&bridgeSummary)){
