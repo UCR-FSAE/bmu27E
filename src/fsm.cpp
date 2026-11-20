@@ -17,11 +17,12 @@ void next_state(CurrentState& curSt, State s) {
     curSt.state_ticks = 0;
 }
 
-void run_fsm(CurrentState& curSt, const Inputs& in, Outputs& out, FaultSummary summary[12], //TODO should I use this approach to pass variables? 
-BridgeFaultSummary bridgeSummary,
-FaultRegisters registers[12],
-BridgeFaultRegisters bridgeRegisters) {
-    out = {};
+//TODO 
+//global variables initilized in faults in bq comm -- same approach as resp 
+
+void run_fsm(CurrentState& curSt, const Inputs& in, Outputs& out)//TODO should I use this approach to pass variables? 
+{
+        out = {};
 
     switch (curSt.state) {
         case BOOT_FAULT:
@@ -33,7 +34,7 @@ BridgeFaultRegisters bridgeRegisters) {
              next_state(curSt, FAULT);
              break;
             }
-            if (++curSt.state_ticks >= 100) {  // TODO check fsm ticks -- 100 × 10 ms = 1 second
+            if (++curSt.state_ticks >= 100) {  // 100 × 10 ms (tick interval) = 1 second
                 curSt.state_ticks = 0;
                 // Poll the BQ 
                 BmsStatus_t summaryStatus = readFaultSummary(summary);

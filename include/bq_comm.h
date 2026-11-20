@@ -176,10 +176,16 @@ typedef struct
 }BridgeFaultRegisters;
 
 
+extern FaultSummary summary[12];
+extern BridgeFaultSummary bridgeSummary;
+extern FaultRegisters registers[12];
+extern BridgeFaultRegisters bridgeRegisters;
+
+
 FaultSummary decodeFaultSummary(uint8_t summary); //decodes the 8 bits summary into a boolean struct
 BridgeFaultSummary decodeBridgeFaultSummary(uint8_t summary);
-BmsStatus_t readFaultSummary(FaultSummary summary[]); //reads summaries from all 12 BQ
-BmsStatus_t readBridgeFaultSummary(BridgeFaultSummary *summary); //reads bridge's summary
-bool checkAnyFault(FaultSummary summary[], BridgeFaultSummary *bridgeSummary); //checks if there's any fault in the summaries
-BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers); //in case a fault is true reads through the corresponding registers  
-BmsStatus_t handleBridgeFaultSummary(BridgeFaultSummary *summary, BridgeFaultRegisters *registers);   
+BmsStatus_t readFaultSummary(FaultSummary out[]); //reads summaries from all 12 BQ
+BmsStatus_t readBridgeFaultSummary(BridgeFaultSummary *out); //reads bridge's summary
+bool checkAnyFault(FaultSummary faults[], BridgeFaultSummary *bridgeFaults); //checks if there's any fault in the summaries
+BmsStatus_t handleFaultSummary(FaultSummary *faultSummary, FaultRegisters *faultRegisters); //in case a fault is true reads through the corresponding registers  
+BmsStatus_t handleBridgeFaultSummary(BridgeFaultSummary *bridgeFaultSummary, BridgeFaultRegisters *bridgeFaultRegisters);   

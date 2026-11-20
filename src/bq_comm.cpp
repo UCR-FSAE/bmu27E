@@ -16,6 +16,12 @@ BqResponse resp;
 uint32_t last_resp[READ_COUNT];
 bool stack_addressed = false;
 
+FaultSummary summary[12];
+BridgeFaultSummary bridgeSummary;
+FaultRegisters registers[12];
+BridgeFaultRegisters bridgeRegisters;
+
+
 // ---------------------------------------------------------------------------
 //                      msg builder helper functions
 // ---------------------------------------------------------------------------
@@ -628,7 +634,7 @@ void readTemps()
 }
 
 
-BmsStatus_t readFaultSummary(FaultSummary summary[])
+BmsStatus_t readFaultSummary(FaultSummary out[])
 {
     BmsStatus_t status = bqRead(STACK_READ_VAL, // reading from the stack to get all 12 resps at once
                                 0,
@@ -648,13 +654,13 @@ BmsStatus_t readFaultSummary(FaultSummary summary[])
                 continue;
                 // do smth
             }
-            summary[i - 1] = decodeFaultSummary(resp.data[i][0]);
+            out[i - 1] = decodeFaultSummary(resp.data[i][0]);
 
         }
     return status;
 }
 
-BmsStatus_t readBridgeFaultSummary(BridgeFaultSummary *summary)
+BmsStatus_t readBridgeFaultSummary(BridgeFaultSummary *out)
 {
     BmsStatus_t status = bqRead(
         SINGLE_READ_VAL, // reading only bridge's registers 
@@ -669,7 +675,7 @@ BmsStatus_t readBridgeFaultSummary(BridgeFaultSummary *summary)
 
         // check if respose is valid
     if (!resp.valid[0]){}
-    *summary = decodeBridgeFaultSummary(resp.data[0][0]);
+    *out = decodeBridgeFaultSummary(resp.data[0][0]);
     
     return status;
 }
@@ -702,24 +708,21 @@ BridgeFaultSummary decodeBridgeFaultSummary(uint8_t summary)
 
 // TODO
 
-//to check: for a stack read the bridge's data is not included
-//to read from the bridge take a single data read at address 0 (second param)
-
-//I could use this for error managing
-    // if (st != BMS_OK)
-    // {
-    //     Serial.printf("[BQ] stack addr read failed: status %d (%d/%d replies, %d CRC errors)\n",
-    //                   (int)st, resp.num_valid, NUM_STACK_DEVICES, resp.crc_errors);
-    // }
+//TO CHECK: I could use this for error managing
+// if (st != BMS_OK)
+// {
+//     Serial.printf("[BQ] stack addr read failed: status %d (%d/%d replies, %d CRC errors)\n",
+//                   (int)st, resp.num_valid, NUM_STACK_DEVICES, resp.crc_errors);
+// }
 
 
-BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
+BmsStatus_t handleFaultSummary(FaultSummary *faultSummary, FaultRegisters *faultRegisters)
 {
     BmsStatus_t status = BMS_OK;
 
-    if (summary == nullptr || registers == nullptr){} //Handle null pointer 
+    if (faultSummary == nullptr || faultRegisters == nullptr){} //Handle null pointer 
         
-    if (summary->communication)
+    if (faultSummary->communication)
     {
         status = bqRead(STACK_READ_VAL, 0, 0x0530, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -727,7 +730,7 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->comm1[i] = resp.data[i][0];
+                faultRegisters->comm1[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x0531, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -735,7 +738,7 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->comm2[i] = resp.data[i][0];
+                faultRegisters->comm2[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x0532, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -743,10 +746,10 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->comm3[i] = resp.data[i][0];
+                faultRegisters->comm3[i] = resp.data[i][0];
     }
 
-    if (summary->otp)
+    if (faultSummary->otp)
     {
         status = bqRead(STACK_READ_VAL, 0, 0x0535, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -754,10 +757,10 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->otp[i] = resp.data[i][0];
+                faultRegisters->otp[i] = resp.data[i][0];
     }
 
-    if (summary->system)
+    if (faultSummary->system)
     {
         status = bqRead(STACK_READ_VAL, 0, 0x0536, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -765,10 +768,10 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->sys[i] = resp.data[i][0];
+                faultRegisters->sys[i] = resp.data[i][0];
     }
 
-    if (summary->protection)
+    if (faultSummary->protection)
     {
         status = bqRead(STACK_READ_VAL, 0, 0x053A, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -776,7 +779,7 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->prot1[i] = resp.data[i][0];
+                faultRegisters->prot1[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x053B, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -784,10 +787,10 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->prot2[i] = resp.data[i][0];
+                faultRegisters->prot2[i] = resp.data[i][0];
     }
 
-    if (summary->overVoltageUnderVoltage)
+    if (faultSummary->overVoltageUnderVoltage)
     {
         status = bqRead(STACK_READ_VAL, 0, 0x053C, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -795,7 +798,7 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->ov1[i] = resp.data[i][0];
+                faultRegisters->ov1[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x053D, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -803,7 +806,7 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->ov2[i] = resp.data[i][0];
+                faultRegisters->ov2[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x053E, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -811,7 +814,7 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->uv1[i] = resp.data[i][0];
+                faultRegisters->uv1[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x053F, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -819,10 +822,10 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->uv2[i] = resp.data[i][0];
+                faultRegisters->uv2[i] = resp.data[i][0];
     }
 
-    if (summary->overTempUnderTemp)
+    if (faultSummary->overTempUnderTemp)
     {
         status = bqRead(STACK_READ_VAL, 0, 0x0540, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -830,7 +833,7 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->ot[i] = resp.data[i][0];
+                faultRegisters->ot[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x0541, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -838,10 +841,10 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->ut[i] = resp.data[i][0];
+                faultRegisters->ut[i] = resp.data[i][0];
     }
 
-    if (summary->comparatorADC)
+    if (faultSummary->comparatorADC)
     {
         status = bqRead(STACK_READ_VAL, 0, 0x0543, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -849,7 +852,7 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->comp_gpio[i] = resp.data[i][0];
+                faultRegisters->comp_gpio[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x0545, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -857,7 +860,7 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->comp_vccb1[i] = resp.data[i][0];
+                faultRegisters->comp_vccb1[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x0546, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -865,7 +868,7 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->comp_vccb2[i] = resp.data[i][0];
+                faultRegisters->comp_vccb2[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x0548, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -873,7 +876,7 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->comp_vcow1[i] = resp.data[i][0];
+                faultRegisters->comp_vcow1[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x0549, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -881,7 +884,7 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->comp_vcow2[i] = resp.data[i][0];
+                faultRegisters->comp_vcow2[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x054B, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -889,7 +892,7 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->comp_cbow1[i] = resp.data[i][0];
+                faultRegisters->comp_cbow1[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x054C, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -897,7 +900,7 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->comp_cbow2[i] = resp.data[i][0];
+                faultRegisters->comp_cbow2[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x054E, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -905,7 +908,7 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->comp_cbfet1[i] = resp.data[i][0];
+                faultRegisters->comp_cbfet1[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x054F, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -913,7 +916,7 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->comp_cbfet2[i] = resp.data[i][0];
+                faultRegisters->comp_cbfet2[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x0550, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -921,10 +924,10 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->comp_misc[i] = resp.data[i][0];
+                faultRegisters->comp_misc[i] = resp.data[i][0];
     }
 
-    if (summary->power)
+    if (faultSummary->power)
     {
         status = bqRead(STACK_READ_VAL, 0, 0x0552, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -932,7 +935,7 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->pwr1[i] = resp.data[i][0];
+                faultRegisters->pwr1[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x0553, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -940,7 +943,7 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->pwr2[i] = resp.data[i][0];
+                faultRegisters->pwr2[i] = resp.data[i][0];
 
         status = bqRead(STACK_READ_VAL, 0, 0x0554, 1, NUM_STACK_DEVICES, &resp, 20);
         if (status != BMS_OK) {} // Handle error
@@ -948,64 +951,64 @@ BmsStatus_t handleFaultSummary(FaultSummary *summary, FaultRegisters *registers)
 
         for (int i = 1; i <= NUM_STACK_DEVICES; i++)
             if (resp.valid[i])
-                registers->pwr3[i] = resp.data[i][0];
+                faultRegisters->pwr3[i] = resp.data[i][0];
     }
 
     return status;
 }
 
 
-BmsStatus_t handleBridgeFaultSummary(BridgeFaultSummary *summary, BridgeFaultRegisters *registers)
+BmsStatus_t handleBridgeFaultSummary(BridgeFaultSummary *bridgeFaultSummary, BridgeFaultRegisters *bridgeFaultRegisters)
 {
     BmsStatus_t status = BMS_OK;
 
-    if (summary == nullptr || registers == nullptr){} //Handle null pointer 
+    if (bridgeFaultSummary == nullptr || bridgeFaultRegisters == nullptr){} //Handle null pointer 
         
-    if (summary->registers)
+    if (bridgeFaultSummary->registers)
     {
         status = bqRead(SINGLE_READ_VAL, 0, 0x2101, 1, 1, &resp, 20); 
         if (status != BMS_OK) {} // Handle error
         markOk(READ_FAULT);
 
         if (resp.valid[0]) //check if valid[0] is correct 
-            registers->reg = resp.data[0][0];
+            bridgeFaultRegisters->reg = resp.data[0][0];
     }
 
-    if (summary->system)
+    if (bridgeFaultSummary->system)
     {
         status = bqRead(SINGLE_READ_VAL, 0, 0x2102, 1, 1, &resp, 20); 
         if (status != BMS_OK) {} // Handle error
         markOk(READ_FAULT);
 
         if (resp.valid[0]) //check if valid[0] is correct 
-            registers->sys = resp.data[0][0];
+            bridgeFaultRegisters->sys = resp.data[0][0];
     }
 
-     if (summary->power)
+     if (bridgeFaultSummary->power)
     {
         status = bqRead(SINGLE_READ_VAL, 0, 0x2103, 1, 1, &resp, 20); 
         if (status != BMS_OK) {} // Handle error
         markOk(READ_FAULT);
 
         if (resp.valid[0]) //check if valid[0] is correct 
-            registers->pwr = resp.data[0][0];
+            bridgeFaultRegisters->pwr = resp.data[0][0];
     }
 
-      if (summary->communication)
+      if (bridgeFaultSummary->communication)
     {
         status = bqRead(SINGLE_READ_VAL, 0, 0x2104, 1, 1, &resp, 20); 
         if (status != BMS_OK) {} // Handle error
         markOk(READ_FAULT);
 
         if (resp.valid[0]) //check if valid[0] is correct 
-            registers->comm1 = resp.data[0][0];
+            bridgeFaultRegisters->comm1 = resp.data[0][0];
 
         status = bqRead(SINGLE_READ_VAL, 0, 0x2105, 1, 1, &resp, 20); 
         if (status != BMS_OK) {} // Handle error
         markOk(READ_FAULT);
 
         if (resp.valid[0]) //check if valid[0] is correct 
-            registers->comm2 = resp.data[0][0];
+            bridgeFaultRegisters->comm2 = resp.data[0][0];
     }
 
     return status;
@@ -1013,21 +1016,26 @@ BmsStatus_t handleBridgeFaultSummary(BridgeFaultSummary *summary, BridgeFaultReg
 }
 
 
-bool checkAnyFault(FaultSummary summary[], BridgeFaultSummary *bridgeSummary){
+bool checkAnyFault(FaultSummary faults[], BridgeFaultSummary *bridgeFaults){
      for(int i = 0; i< NUM_STACK_DEVICES; i++){
-        if(summary[i].communication || 
-            summary[i].comparatorADC ||
-            summary[i].otp ||
-            summary[i].overTempUnderTemp || 
-            summary[i].overVoltageUnderVoltage || 
-            summary[i].power ||
-            summary[i].protection ||
-            summary[i].system ||
-                bridgeSummary->communication || //TODO should I make another function only for bridge?
-                bridgeSummary->power ||
-                bridgeSummary->registers ||
-                bridgeSummary->system)
+        if(faults[i].communication || 
+            faults[i].comparatorADC ||
+            faults[i].otp ||
+            faults[i].overTempUnderTemp || 
+            faults[i].overVoltageUnderVoltage || 
+            faults[i].power ||
+            faults[i].protection ||
+            faults[i].system ||
+                bridgeFaults->communication || //TODO should I make another function only for bridge?
+                bridgeFaults->power ||
+                bridgeFaults->registers ||
+                bridgeFaults->system)
             return true;
         }
     return false;
 }
+
+
+//Check Eval Module BQ79616EVM-021 datasheet -- if we can test faults in it 
+//https://www.ti.com/lit/ug/sluuc57b/sluuc57b.pdf?ts=1791407374570&ref_url=https%253A%252F%252Fwww.ti.com%252Ftool%252FBQ79600EVM
+//https://www.ti.com/lit/ug/sluuc37d/sluuc37d.pdf?ts=1774614228519&ref_url=https%3A%2F%2Fwww.ti.com%2Ftool%2FBQ79616EVM-021
