@@ -34,6 +34,8 @@ bool SPI_CAN::readReg(uint8_t addr, uint8_t mask, uint8_t expected) {
     uint8_t ret_val = _spi.transfer(0x00);
     this->END_TX();
 
+    Serial.print("readReg: ");
+    Serial.println(ret_val);
     if ((ret_val & mask) == expected) { return true; }
     return false;
 }
@@ -57,6 +59,7 @@ bool SPI_CAN::begin() {
 
     // check for '0b100' in CANSTAT
     if (!this->readReg(REG_CANSTAT, 0xE0, 0x80)) {
+        Serial.println("reset failed");
         return false;
     }
 
@@ -91,6 +94,7 @@ bool SPI_CAN::begin() {
     delay(5);
 
     if (!this->readReg(REG_CANSTAT, 0xE0, 0x00)) {
+        Serial.println("can status failed");
         return false;
     }
 
