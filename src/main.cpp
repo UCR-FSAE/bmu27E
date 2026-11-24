@@ -12,10 +12,10 @@ unsigned long prevMillis = 0;
 
 // CAN messages
 ESP32_CAN espCan;
+SPI_CAN spiCan;
+
 static CAN_message_t CAN_outMsg1;
 static CAN_message_t CAN_outMsg2;
-
-SPI_CAN spiCan;
 
 // ------------- BMS Types -------------
 CurrentState    curState;
@@ -57,41 +57,26 @@ void setup() {
     Serial.begin(115200);
     delay(2000);                       
 
-    // bqUartInit();
-    // delay(10);
+    bqUartInit();
+    delay(10);
 
-    // bq_wake();
+    bq_wake();
 
-    // addrOk = bq_auto_address();
-    // Serial.printf("bq_auto_address(): %s\n", addrOk ? "PASS" : "FAIL");
+    addrOk = bq_auto_address();
+    Serial.printf("bq_auto_address(): %s\n", addrOk ? "PASS" : "FAIL");
 
     spiCan.init();
     
     while (!spiCan.begin()) {
         Serial.println("spiCan unable to init.");
     } 
-
-    // pinMode(11, OUTPUT);
 }
-
-uint8_t buf[8] = {'h', 'e', 'l', 'l', 'o', 'b', 'r', 'o'};
 
 void loop() {
     unsigned long now = millis();
     if (now - prevMillis >= 500) {
         prevMillis = now;
         digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-        // digitalWrite(11, !digitalRead(11));
-    }
-
-    CAN_outMsg1.id = 0xC0;
-    CAN_outMsg1.len = 8;
-    for (int i = 0; i < 8; i++) {
-        CAN_outMsg1.buf[i] = buf[i];
-    }
-
-    if (!spiCan.write(CAN_outMsg1)) {
-        Serial.println("u fucked up lol");
     }
 
     delay(10);
