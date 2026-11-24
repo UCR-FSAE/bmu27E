@@ -5,77 +5,14 @@
 #include "temps.h"
 #include "bq_comm.h"
 
-// ---=== BASIC PLAN
-// get resistance using formula: res = R_CONST * gpio_uv / (tsref_uv - gpio_uv);
-// old thermistor code uses steinhart formula w/ the 3 coefficients A, B, C.
-// find out what current thermistor values are from altium
-// evan needs to meet w/ other teams during scope meeting to figure this out but assume old stuff still being used for now
-
-// ---=== STEINHART NUMBERS
-// STEIN_<A-C> = based on thermistor material/manufacturing process. likely different for the current thermistor?
-// R_CONST = known fixed pullup resistor between TSREF and GPIO. old therm said 10k ohms, might be different now?
-#define STEIN_A 1.1395e-3f
-#define STEIN_B 2.3230e-4f
-#define STEIN_C 9.5816e-8f
-#define R_CONST 10000.0f // BASED ON SOMETHING THAT PHYSICALLY EXISTS. CHANGE LATER? 
-
-
-
-/* ---=== 11.6.26 NOTES
-helper func, put wrapper that reads through everything using this
-look through other schools and see how they display temps (highest of indivual CMUs or averages?)
-BMS stores temps of all devices, displays highest? put in struct
-output to CAN is for someone els
-
-novermber deadline testing extended
-remember to fill out how i followed the ruleset
-
-make all of my code non-blocking. it's like asynch waiting where u interrupt when the flag is true 
-evan doesnt know how to approach off the top of his head, look into it urself?
-uart mailbox? bmu is call/response by default which we dont want? 
-
---- interrupt driven: doesnt matter
-basically start serial periph (evan does it and tells me why its significant later)
-setup so that anytime hardware gets message, call "on recievie"  function.
-onreceive "when u get message over UART. does whatever u want though"
-ideally onreceive dumps everything into a struct/buffer/something short for low latency
-
-and thats all it does. later down the line, reading from device is really just reading from this struct
-basically dont access device directly, get a snapshot based on interrupt driven on recive we get
-better than polling (wasteful). mailbox could get full
-
-// evan writes this code
-// the struct is something I read in the future
-// struct has command frame. raw hex that I decipher
+/* ---=== COMPUTE TEMP
+helper function for readTemps()
+converts register value to valid measurement of microvolts
+uses two voltages to calculate resistance
+uses resistance to calculate temperature in kelvin using steinhart formula
+shift temp to return as celcius
 */
-
-// ---=== MAIN THING IDK
-/*
- 	can i do stack read for cell temps? (datasheet maybe)
-	report back on this next week
-	evan will.............. work on getting interrupt thing struct 
-*/
-
-// ---=== GET TEMP
-// helper func for eventual readTemps()
-// either single read that's looped 12 times in the wrapper or a stack read for all
-// need to reformat to use evan's interrupt-driven non-blocking struct. later.
-static float getTemp(uint16_t deviceID){
-	//data from bq
-	BqResponse response;
-
-	// raw values from bq pins
-	uint16_t gpio_raw = 0;
-	uint16_t tsref_raw = 0;
-
- 	// read from gpio and tsref registers
-	// values we want are always gonna be in the same registers.
-	if(bqRead(SINGLE_READ_VAL, deviceID, 0x058E, 2, 1, &response, 100) != BMS_OK || !response.valid[deviceID]){return NAN;}
-	gpio_raw = (uint16_t)(response.data[deviceID][0] << 8) | response.data[deviceID][1];
-
-	if(bqRead(SINGLE_READ_VAL, deviceID, 0x058C, 2, 1, &response, 100) != BMS_OK || !response.valid[deviceID]){return NAN;}
-	tsref_raw = (uint16_t)(response.data[deviceID][0] << 8) | response.data[deviceID][1];
-
+static float computeTemp(uint16_t gpio_raw, uint16_t tsref_raw){
 	// gpio and tsref converted to microvolts
 	// 2's compliment multiplied by scaling value from bq79616 datasheet
     float gpio_uV  = (float)(int16_t)gpio_raw * 152.59f;	// 152.59 is for GPIO*_HI/LO
@@ -93,39 +30,44 @@ static float getTemp(uint16_t deviceID){
 	return temp;
 }
 
-/*---=== POTENTIAL STACK READ STEPS
-stack read is a real thing that is supposed both in software design ref. and 616 datasheet.
-use two stack reads. one for GPIO and one for TSREF
-loop through array to calculate all temps
 
-current code works around single read.
+/* ---=== GET TEMP : STACK READ
+get readings from BqResponse.
+	- read stack for 12 GPIOs & store raw data in array
+	- read stack for 12 TSREFs & store raw data in array
+	
+then calculate temps and update 
 */
+void readTemps(){
+	//data from bq
+	BqResponse response;
 
-//---=== READ TEMPS
-// wrapper that uses getTemp() to read from all 12 cells
-// returns highest temp of all cells? or returns all cells?
-// only returning highest for now. probably will change later.
-float readTemps(){
-	// float temps[NUM_STACK_DEVICES];
-	float maxTemp = -INFINITY;
-	float curTemp = 0;
-	uint8_t nValid = 0;
+	// raw values from bq pins
+	uint16_t gpio_raw[BQ_MAX_DEVICES];
+	bool gpio_valid[BQ_MAX_DEVICES];
 
-	// deviceID based on autoaddress. 1-12 is for each BQ79616.
-	// works b/c only devices on stack are the bq's and master
-	for(uint8_t i = 0; i < NUM_STACK_DEVICES; i++){
-		curTemp = getTemp(i+1);
-		// temps[i] = curTemp;
+	uint16_t tsref_raw[BQ_MAX_DEVICES];
+	bool tsref_valid[BQ_MAX_DEVICES];
 
-		//not sure how to approach this yet.
-		if(!isnan(curTemp)){
-			nValid++;
-		}
-
-		if(curTemp > maxTemp){maxTemp = curTemp;}
+ 	// read from gpio and tsref registers & markOk. Ignore 1st decvice (master)
+	if(bqRead(STACK_READ_VAL, 0, 0x058E, 2, NUM_STACK_DEVICES, &response, 100) != BMS_OK){return;}
+	for(int i = 1; i <= NUM_STACK_DEVICES; i++){
+		gpio_valid[i] = response.valid[i];
+		gpio_raw[i] = (uint16_t)(response.data[i][0] << 8) | response.data[i][1];
 	}
 	
+	if(bqRead(STACK_READ_VAL, 0, 0x058C, 2, NUM_STACK_DEVICES, &response, 100) != BMS_OK){return;}
+	for(int i = 1; i <= NUM_STACK_DEVICES; i++){
+		tsref_valid[i] = response.valid[i];
+		tsref_raw[i] = (uint16_t)(response.data[i][0] << 8) | response.data[i][1];
+	}
 
-	if(nValid <= 0){maxTemp = NAN;}
-	return maxTemp;
+	measOk(READ_TEMP);
+
+	// compute each temp individually and update cell_temps 
+	for(int i = 1; i < NUM_STACK_DEVICES; i++){
+		if(gpio_valid[i] && tsref_valid[i]){
+			cell_temps[i] = computeTemp(gpio_raw[i], tsref_raw[i]);
+		}
+	}
 }

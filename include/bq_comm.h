@@ -10,6 +10,12 @@
 #include "bq_constants.h"
 
 // ---------------------------------------------------------------------------
+// Temperatrue
+// ---------------------------------------------------------------------------
+// global array storing temps of all 12 cells
+extern float cell_temps[12];
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 // Replies stored by the device address inside each reply
@@ -98,3 +104,4 @@ void rebalanceVoltages();
 void markOk(Meas m);
 void resetAll();
 bool commLost();
+

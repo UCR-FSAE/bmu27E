@@ -16,6 +16,9 @@ BqResponse resp;
 uint32_t last_resp[READ_COUNT];
 bool stack_addressed = false;
 
+//global array w/ temps of all 12 cells
+float cell_temps[12];
+
 // ---------------------------------------------------------------------------
 //                      msg builder helper functions
 // ---------------------------------------------------------------------------
