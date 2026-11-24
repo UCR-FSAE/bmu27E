@@ -1,10 +1,7 @@
-/*
-    Constants
-*/
+#pragma once
 
 #define EVM_TEST
 
-#pragma once
 // ---------------------------------------------------------------------------
 // Peripheral constants
 // ---------------------------------------------------------------------------
@@ -18,13 +15,13 @@
 #define BQ_UART_BAUD       1000000   // BQ79600 UART speed
 #define BQ_MAX_DEVICES     13        // BQ79600 (addr 0) + 12 x BQ79616 (addr 1..12)
 #define BQ_MAX_RESP_BYTES  128       // largest read the chips allow
+#define BQ_MAX_RETRIES     3        // re-requests after the first attempt
+#define COMM_TIMEOUT_MS    250
 
 #ifdef EVM_TEST
 
 #define TOTAL_DEVICES      2
 #define NUM_STACK_DEVICES  1
-
-#define BQ_MAX_RETRIES  3        // re-requests after the first attempt
 
 #else
 
