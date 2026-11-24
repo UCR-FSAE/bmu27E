@@ -68,7 +68,7 @@ void setup() {
     spiCan.init();
     
     while (!spiCan.begin()) {
-        // Serial.println("spiCan unable to init.");
+        Serial.println("spiCan unable to init.");
     } 
 
     // pinMode(11, OUTPUT);

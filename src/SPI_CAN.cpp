@@ -19,12 +19,16 @@
 
 static const SPISettings kSpi(8000000, MSBFIRST, SPI_MODE0);
 
-const uint8_t CS_PIN = 11;
+// SPI_CAN.cpp
+const uint8_t PIN_SCK  = 7;   // XIAO D8
+const uint8_t PIN_MISO = 8;   // XIAO D9
+const uint8_t PIN_MOSI = 9;   // XIAO D10
+const uint8_t CS_PIN   = 11;  // raw GPIO11
 
 void SPI_CAN::init() {
-    _spi.begin();
     pinMode(CS_PIN, OUTPUT);
-    digitalWrite(CS_PIN, HIGH); 
+    digitalWrite(CS_PIN, HIGH);
+    _spi.begin(PIN_SCK, PIN_MISO, PIN_MOSI, -1);
 }
 
 bool SPI_CAN::readReg(uint8_t addr, uint8_t mask, uint8_t expected) {
