@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include "ESP32_CAN.h"
-
+#include "SPI_CAN.h"
 #include "fsm.h"
 #include "bq_comm.h"
 
@@ -11,7 +11,9 @@
 unsigned long prevMillis = 0;
 
 // CAN messages
-ESP32_CAN Can;
+ESP32_CAN espCan;
+SPI_CAN spiCan;
+
 static CAN_message_t CAN_outMsg1;
 static CAN_message_t CAN_outMsg2;
 
@@ -62,6 +64,12 @@ void setup() {
 
     addrOk = bq_auto_address();
     Serial.printf("bq_auto_address(): %s\n", addrOk ? "PASS" : "FAIL");
+
+    spiCan.init();
+    
+    while (!spiCan.begin()) {
+        Serial.println("spiCan unable to init.");
+    } 
 }
 
 void loop() {
@@ -70,4 +78,6 @@ void loop() {
         prevMillis = now;
         digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
     }
+
+    delay(10);
 }
