@@ -1,6 +1,6 @@
 #pragma once
 
--#define EVM_TEST
+#define EVM_TEST
 
 // ---------------------------------------------------------------------------
 // Peripheral constants
