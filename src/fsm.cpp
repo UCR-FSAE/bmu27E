@@ -17,10 +17,8 @@ void next_state(CurrentState& curSt, State s) {
     curSt.state_ticks = 0;
 }
 
-//TODO 
-//global variables initilized in faults in bq comm -- same approach as resp 
 
-void run_fsm(CurrentState& curSt, const Inputs& in, Outputs& out)//TODO should I use this approach to pass variables? 
+void run_fsm(CurrentState& curSt, const Inputs& in, Outputs& out) 
 {
         out = {};
 
