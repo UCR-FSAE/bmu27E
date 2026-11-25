@@ -19,6 +19,10 @@ bool stack_addressed = false;
 //global array w/ temps of all 12 cells
 float cell_temps[12];
 
+//temp reading rule violation trackers
+bool temp_overheat;
+bool temp_missing;
+
 // ---------------------------------------------------------------------------
 //                      msg builder helper functions
 // ---------------------------------------------------------------------------

@@ -17,8 +17,8 @@ R_CONST = known fixed pullup resistor between TSREF and GPIO. old therm said 10k
 // TODO: figure out how we deal w/ bad reads
 // TODO: find the max value for the cell's datasheet
 #define TEMP_MAX_C 60.0f	// rules say temps cant be below 60*C of the cell's max on the datasheet
-bool temp_overheat;			// tracks if any overheats exist
-bool temp_missing;			// tracks if bad/missing reads exist
+temp_overheat = false;			// tracks if any overheats exist
+temp_missing = false;			// tracks if bad/missing reads exist
 
 /* ---=== COMPUTE TEMP
 helper function for readTemps()
