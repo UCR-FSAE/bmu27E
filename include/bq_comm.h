@@ -15,6 +15,10 @@
 // global array storing temps of all 12 cells
 extern float cell_temps[12];
 
+//bools to track rule violations
+extern bool temp_overheat;
+extern bool temp_missing;
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
