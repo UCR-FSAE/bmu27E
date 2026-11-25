@@ -114,7 +114,7 @@ typedef enum
     FAULT_PROT,
 } FaultGroup;
 
-typedef struct
+typedef struct //# of registers for each fault --> see FaultRegisters
 {
     bool protection; //2
     bool comparatorADC; //10
