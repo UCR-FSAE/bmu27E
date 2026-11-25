@@ -44,6 +44,7 @@ BmsStatus_t readPowerBistResult(PowerBistResult *result) {
     // first check if the operation was successful with  FAULT_PWR2[PWRBIST_FAIL]
     BmsStatus_t status = bqRead(SINGLE_READ_VAL, 0, FAULT_PWR2, 1, 1, &resp, 20);
     if (status != BMS_OK) return status;
+    markOk(READ_FAULT);
 
     result->pwrBistFail = (resp.data[0][0] & 0x40); // the bit 6 must be 0 otherwise --> fault in BIST
     result->faultPwr2 = resp.data[0][0];
@@ -51,6 +52,7 @@ BmsStatus_t readPowerBistResult(PowerBistResult *result) {
     // store fault_pwr1
     status = bqRead(SINGLE_READ_VAL, 0, FAULT_PWR1, 1, 1, &resp, 20);
     if (status != BMS_OK) return status;
+    markOk(READ_FAULT);
     result->faultPwr1 = resp.data[0][0];
 
     return BMS_OK;
