@@ -25,7 +25,6 @@ Outputs         out;
 #define BQ616_DIR0_ADDR_REG 0x0306   // device address
 #define BQ616_PARTID_REG    0x0500   // 0x21 = BQ79616
 
-static BqResponse resp;
 static bool addrOk = false;
 
 // Stack-read one byte from every 616 and check it against `expected`.
